@@ -1,12 +1,15 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import LogoutButton from "@/components/LogoutButton";
+import Dashboard from "@/components/Dashboard";
+import type { Transaction } from "@/lib/transactions";
 
 export default async function Home() {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const { data, error } = await supabase
+    .from("transactions")
+    .select("*")
+    .order("transaction_date", { ascending: false });
 
   return (
     <div className="flex flex-col min-h-dvh bg-[#f7f8fc]">
@@ -15,19 +18,24 @@ export default async function Home() {
         <div className="flex items-center gap-2">
           <Link
             href="/transactions"
-            className="text-[#00b4d8] bg-[#e8f7fb] text-xs font-medium px-3 py-1.5 rounded-lg active:bg-[#d0eff7] transition-colors"
+            className="text-gray-600 bg-gray-100 text-xs px-3 py-1.5 rounded-full active:bg-gray-200 transition-colors"
           >
             거래내역
+          </Link>
+          <Link
+            href="/transactions/new"
+            className="text-[#00b4d8] bg-[#e8f7fb] text-xs font-medium px-3 py-1.5 rounded-lg active:bg-[#d0eff7] transition-colors"
+          >
+            입력
           </Link>
           <LogoutButton />
         </div>
       </header>
       <div className="flex-1 px-4 py-4 space-y-4 pb-24 md:max-w-3xl md:mx-auto md:w-full">
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
-          <p className="text-sm text-gray-700">
-            로그인 성공: {user?.email}
-          </p>
-        </div>
+        <Dashboard
+          initialTransactions={(data as Transaction[]) ?? []}
+          initialError={!!error}
+        />
       </div>
     </div>
   );
