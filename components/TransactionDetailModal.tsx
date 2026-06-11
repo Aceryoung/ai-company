@@ -1,0 +1,294 @@
+"use client";
+
+import { useState } from "react";
+import { createClient } from "@/lib/supabase/client";
+import { getBadge, type Transaction } from "@/lib/transactions";
+
+type Props = {
+  transaction: Transaction;
+  onClose: () => void;
+  onChanged: () => void;
+  onError: (message: string) => void;
+};
+
+type ActionLoading = "save" | "delete" | "toggle" | null;
+
+export default function TransactionDetailModal({
+  transaction,
+  onClose,
+  onChanged,
+  onError,
+}: Props) {
+  const [editing, setEditing] = useState(false);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [actionLoading, setActionLoading] = useState<ActionLoading>(null);
+
+  const [type, setType] = useState(transaction.type);
+  const [counterparty, setCounterparty] = useState(transaction.counterparty);
+  const [amount, setAmount] = useState(String(transaction.amount));
+  const [transactionDate, setTransactionDate] = useState(transaction.transaction_date);
+  const [memo, setMemo] = useState(transaction.memo ?? "");
+
+  const badge = getBadge(transaction);
+  const disabled = actionLoading !== null;
+
+  const handleSave = async () => {
+    const parsedAmount = Number(amount);
+    if (!counterparty.trim() || !Number.isInteger(parsedAmount) || parsedAmount <= 0) {
+      onError("입력값을 확인해주세요");
+      return;
+    }
+
+    setActionLoading("save");
+    const supabase = createClient();
+    const { error } = await supabase
+      .from("transactions")
+      .update({
+        type,
+        counterparty: counterparty.trim(),
+        amount: parsedAmount,
+        transaction_date: transactionDate,
+        memo: memo.trim() || null,
+      })
+      .eq("id", transaction.id);
+
+    setActionLoading(null);
+
+    if (error) {
+      onError("처리에 실패했어요. 다시 시도해주세요");
+      return;
+    }
+
+    onChanged();
+  };
+
+  const handleToggleStatus = async () => {
+    setActionLoading("toggle");
+    const supabase = createClient();
+    const { error } = await supabase
+      .from("transactions")
+      .update({ is_completed: !transaction.is_completed })
+      .eq("id", transaction.id);
+
+    setActionLoading(null);
+
+    if (error) {
+      onError("처리에 실패했어요. 다시 시도해주세요");
+      return;
+    }
+
+    onChanged();
+  };
+
+  const handleDelete = async () => {
+    setActionLoading("delete");
+    const supabase = createClient();
+    const { error } = await supabase.from("transactions").delete().eq("id", transaction.id);
+
+    setActionLoading(null);
+
+    if (error) {
+      onError("처리에 실패했어요. 다시 시도해주세요");
+      return;
+    }
+
+    onChanged();
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/30 flex items-end sm:items-center justify-center z-40">
+      <div className="bg-white rounded-t-2xl sm:rounded-2xl w-full sm:max-w-md p-4 shadow-xl space-y-4">
+        {!editing ? (
+          <>
+            <div className="flex items-start justify-between">
+              <div className="space-y-1">
+                <p className="text-sm font-semibold text-gray-900">{transaction.counterparty}</p>
+                <p className="text-xs text-gray-400">{transaction.transaction_date}</p>
+              </div>
+              <span className={badge.className}>{badge.label}</span>
+            </div>
+
+            <div className="space-y-2 text-sm text-gray-700">
+              <div className="flex items-center justify-between">
+                <span className="text-gray-500">구분</span>
+                <span>{transaction.type === "income" ? "매출" : "매입"}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-gray-500">금액</span>
+                <span className="font-semibold text-gray-900">
+                  {transaction.amount.toLocaleString()}원
+                </span>
+              </div>
+              {transaction.memo && (
+                <div className="flex items-start justify-between gap-4">
+                  <span className="text-gray-500 shrink-0">메모</span>
+                  <span className="text-right">{transaction.memo}</span>
+                </div>
+              )}
+            </div>
+
+            {confirmingDelete ? (
+              <div className="space-y-2">
+                <p className="text-sm text-gray-700 text-center">정말 삭제할까요?</p>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setConfirmingDelete(false)}
+                    disabled={disabled}
+                    className="flex-1 text-gray-600 bg-gray-100 text-sm font-medium px-4 py-3 rounded-xl active:bg-gray-200 disabled:opacity-40 transition-colors"
+                  >
+                    취소
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleDelete}
+                    disabled={disabled}
+                    className="flex-1 bg-red-500 text-white text-sm font-semibold px-4 py-3 rounded-xl active:bg-red-600 disabled:opacity-40 transition-colors flex items-center justify-center gap-2"
+                  >
+                    {actionLoading === "delete" && (
+                      <span className="w-4 h-4 rounded-full border-2 border-white border-t-transparent animate-spin" />
+                    )}
+                    삭제
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <button
+                  type="button"
+                  onClick={handleToggleStatus}
+                  disabled={disabled}
+                  className="w-full bg-[#00b4d8] text-white text-sm font-semibold px-4 py-3 rounded-xl active:bg-[#0096b8] disabled:opacity-40 transition-colors flex items-center justify-center gap-2"
+                >
+                  {actionLoading === "toggle" && (
+                    <span className="w-4 h-4 rounded-full border-2 border-white border-t-transparent animate-spin" />
+                  )}
+                  {transaction.is_completed ? "미완료로 변경" : "완료로 변경"}
+                </button>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setEditing(true)}
+                    disabled={disabled}
+                    className="flex-1 text-[#00b4d8] bg-[#e8f7fb] text-sm font-medium px-4 py-3 rounded-xl active:bg-[#d0eff7] disabled:opacity-40 transition-colors"
+                  >
+                    수정
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setConfirmingDelete(true)}
+                    disabled={disabled}
+                    className="flex-1 text-gray-600 bg-gray-100 text-sm font-medium px-4 py-3 rounded-xl active:bg-gray-200 disabled:opacity-40 transition-colors"
+                  >
+                    삭제
+                  </button>
+                </div>
+                <button
+                  type="button"
+                  onClick={onClose}
+                  disabled={disabled}
+                  className="w-full text-gray-500 text-sm font-medium px-4 py-2 disabled:opacity-40 transition-colors"
+                >
+                  닫기
+                </button>
+              </div>
+            )}
+          </>
+        ) : (
+          <>
+            <p className="text-sm font-semibold text-gray-900">거래 수정</p>
+
+            <div className="space-y-3">
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setType("income")}
+                  disabled={disabled}
+                  className={`flex-1 text-sm font-medium px-4 py-3 rounded-xl transition-colors disabled:opacity-40 ${
+                    type === "income"
+                      ? "bg-[#e8f7fb] text-[#00b4d8]"
+                      : "bg-gray-100 text-gray-500"
+                  }`}
+                >
+                  매출
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setType("expense")}
+                  disabled={disabled}
+                  className={`flex-1 text-sm font-medium px-4 py-3 rounded-xl transition-colors disabled:opacity-40 ${
+                    type === "expense"
+                      ? "bg-[#e8f7fb] text-[#00b4d8]"
+                      : "bg-gray-100 text-gray-500"
+                  }`}
+                >
+                  매입
+                </button>
+              </div>
+
+              <input
+                type="text"
+                value={counterparty}
+                onChange={(e) => setCounterparty(e.target.value)}
+                disabled={disabled}
+                placeholder="거래처명"
+                className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm text-gray-900 outline-none focus:border-[#00b4d8] transition-colors placeholder:text-gray-400 disabled:opacity-40"
+              />
+
+              <input
+                type="number"
+                inputMode="numeric"
+                min={1}
+                step={1}
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+                disabled={disabled}
+                placeholder="금액"
+                className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm text-gray-900 outline-none focus:border-[#00b4d8] transition-colors placeholder:text-gray-400 disabled:opacity-40"
+              />
+
+              <input
+                type="date"
+                value={transactionDate}
+                onChange={(e) => setTransactionDate(e.target.value)}
+                disabled={disabled}
+                className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm text-gray-900 outline-none focus:border-[#00b4d8] transition-colors disabled:opacity-40"
+              />
+
+              <textarea
+                value={memo}
+                onChange={(e) => setMemo(e.target.value)}
+                disabled={disabled}
+                placeholder="메모 (선택)"
+                rows={2}
+                className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm text-gray-900 outline-none focus:border-[#00b4d8] transition-colors placeholder:text-gray-400 disabled:opacity-40 resize-none"
+              />
+            </div>
+
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setEditing(false)}
+                disabled={disabled}
+                className="flex-1 text-gray-600 bg-gray-100 text-sm font-medium px-4 py-3 rounded-xl active:bg-gray-200 disabled:opacity-40 transition-colors"
+              >
+                취소
+              </button>
+              <button
+                type="button"
+                onClick={handleSave}
+                disabled={disabled}
+                className="flex-1 bg-[#00b4d8] text-white text-sm font-semibold px-4 py-3 rounded-xl active:bg-[#0096b8] disabled:opacity-40 transition-colors flex items-center justify-center gap-2"
+              >
+                {actionLoading === "save" && (
+                  <span className="w-4 h-4 rounded-full border-2 border-white border-t-transparent animate-spin" />
+                )}
+                저장
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
