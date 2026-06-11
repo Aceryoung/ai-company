@@ -1,15 +1,14 @@
 "use client";
 
-import { useRef, useState } from "react";
-import Link from "next/link";
+import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { Toast, useToast } from "@/components/Toast";
+import { Spinner } from "@/components/Spinner";
 import type { TransactionType } from "@/lib/transactions";
 
 function todayInKST() {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul" }).format(new Date());
 }
-
-type Toast = { message: string; tone: "success" | "error" };
 
 export default function NewTransactionPage() {
   const [type, setType] = useState<TransactionType>("income");
@@ -19,14 +18,7 @@ export default function NewTransactionPage() {
   const [memo, setMemo] = useState("");
   const [isCompleted, setIsCompleted] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [toast, setToast] = useState<Toast | null>(null);
-  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const showToast = (message: string, tone: Toast["tone"]) => {
-    if (toastTimer.current) clearTimeout(toastTimer.current);
-    setToast({ message, tone });
-    toastTimer.current = setTimeout(() => setToast(null), 3000);
-  };
+  const { toast, showToast } = useToast();
 
   const handleSubmit = async () => {
     const parsedAmount = Number(amount);
@@ -63,22 +55,8 @@ export default function NewTransactionPage() {
 
   return (
     <div className="flex flex-col min-h-dvh bg-[#f7f8fc]">
-      <header className="flex items-center justify-between px-4 py-3 bg-white border-b border-gray-100">
+      <header className="lg:hidden flex items-center justify-between px-4 py-3 bg-white border-b border-gray-100">
         <h1 className="text-2xl font-bold text-gray-900">거래 입력</h1>
-        <div className="flex items-center gap-2">
-          <Link
-            href="/"
-            className="text-gray-600 bg-gray-100 text-xs px-3 py-1.5 rounded-full active:bg-gray-200 transition-colors"
-          >
-            현황
-          </Link>
-          <Link
-            href="/transactions"
-            className="text-gray-600 bg-gray-100 text-xs px-3 py-1.5 rounded-full active:bg-gray-200 transition-colors"
-          >
-            거래내역
-          </Link>
-        </div>
       </header>
 
       <div className="flex-1 px-4 py-4 space-y-4 pb-24 md:max-w-3xl md:mx-auto md:w-full">
@@ -161,9 +139,7 @@ export default function NewTransactionPage() {
             disabled={saving}
             className="w-full bg-[#00b4d8] text-white text-sm font-semibold px-4 py-3 rounded-xl active:bg-[#0096b8] disabled:opacity-40 transition-colors flex items-center justify-center gap-2"
           >
-            {saving && (
-              <span className="w-4 h-4 rounded-full border-2 border-white border-t-transparent animate-spin" />
-            )}
+            {saving && <Spinner />}
             저장
           </button>
 
@@ -171,15 +147,7 @@ export default function NewTransactionPage() {
         </div>
       </div>
 
-      {toast && (
-        <div
-          className={`fixed top-4 left-1/2 -translate-x-1/2 bg-white border border-gray-100 shadow-sm rounded-xl px-4 py-3 text-sm font-medium flex items-center gap-2 z-50 ${
-            toast.tone === "success" ? "text-[#5f9428]" : "text-red-500"
-          }`}
-        >
-          {toast.message}
-        </div>
-      )}
+      <Toast toast={toast} />
     </div>
   );
 }

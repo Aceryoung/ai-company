@@ -1,13 +1,13 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import TransactionDetailModal from "@/components/TransactionDetailModal";
+import { Toast, useToast } from "@/components/Toast";
+import { Skeleton } from "@/components/Skeleton";
 import { getBadge, type Transaction } from "@/lib/transactions";
 
 type ListState = "loading" | "empty" | "error" | "success";
-
-type Toast = { message: string; tone: "success" | "error" };
 
 type Props = {
   initialTransactions: Transaction[];
@@ -20,8 +20,7 @@ export default function TransactionsList({ initialTransactions, initialError }: 
     initialError ? "error" : initialTransactions.length > 0 ? "success" : "empty",
   );
   const [selected, setSelected] = useState<Transaction | null>(null);
-  const [toast, setToast] = useState<Toast | null>(null);
-  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const { toast, showToast } = useToast(2000);
 
   const fetchTransactions = useCallback(async () => {
     const supabase = createClient();
@@ -44,19 +43,13 @@ export default function TransactionsList({ initialTransactions, initialError }: 
     fetchTransactions();
   };
 
-  const showToast = (message: string, tone: Toast["tone"]) => {
-    if (toastTimer.current) clearTimeout(toastTimer.current);
-    setToast({ message, tone });
-    toastTimer.current = setTimeout(() => setToast(null), 2000);
-  };
-
   return (
     <>
       {state === "loading" && (
         <div className="space-y-2">
           {[0, 1, 2, 3].map((i) => (
             <div key={i} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
-              <div className="animate-pulse bg-gray-100 rounded-lg h-6 w-24" />
+              <Skeleton />
             </div>
           ))}
         </div>
@@ -125,15 +118,7 @@ export default function TransactionsList({ initialTransactions, initialError }: 
         />
       )}
 
-      {toast && (
-        <div
-          className={`fixed top-4 left-1/2 -translate-x-1/2 bg-white border border-gray-100 shadow-sm rounded-xl px-4 py-3 text-sm font-medium flex items-center gap-2 z-50 ${
-            toast.tone === "success" ? "text-[#5f9428]" : "text-red-500"
-          }`}
-        >
-          {toast.message}
-        </div>
-      )}
+      <Toast toast={toast} />
     </>
   );
 }

@@ -3,6 +3,7 @@
 import { useCallback, useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
+import { Skeleton } from "@/components/Skeleton";
 import { getBadge, type Transaction } from "@/lib/transactions";
 
 type ViewState = "loading" | "error" | "success";
@@ -56,22 +57,22 @@ export default function Dashboard({ initialTransactions, initialError }: Props) 
     return (
       <div className="space-y-4">
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
-          <div className="animate-pulse bg-gray-100 rounded-lg h-6 w-24" />
+          <Skeleton />
         </div>
         <div className="grid grid-cols-2 gap-3">
           {[0, 1].map((i) => (
             <div key={i} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
-              <div className="animate-pulse bg-gray-100 rounded-lg h-6 w-24" />
+              <Skeleton />
             </div>
           ))}
         </div>
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
-          <div className="animate-pulse bg-gray-100 rounded-lg h-6 w-24" />
+          <Skeleton />
         </div>
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
           {[0, 1, 2].map((i) => (
             <div key={i} className="px-4 py-3 border-b border-gray-50 last:border-0">
-              <div className="animate-pulse bg-gray-100 rounded-lg h-6 w-24" />
+              <Skeleton />
             </div>
           ))}
         </div>

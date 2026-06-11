@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { Spinner } from "@/components/Spinner";
 import { getBadge, type Transaction } from "@/lib/transactions";
 
 type Props = {
@@ -145,9 +146,7 @@ export default function TransactionDetailModal({
                     disabled={disabled}
                     className="flex-1 bg-red-500 text-white text-sm font-semibold px-4 py-3 rounded-xl active:bg-red-600 disabled:opacity-40 transition-colors flex items-center justify-center gap-2"
                   >
-                    {actionLoading === "delete" && (
-                      <span className="w-4 h-4 rounded-full border-2 border-white border-t-transparent animate-spin" />
-                    )}
+                    {actionLoading === "delete" && <Spinner />}
                     삭제
                   </button>
                 </div>
@@ -160,9 +159,7 @@ export default function TransactionDetailModal({
                   disabled={disabled}
                   className="w-full bg-[#00b4d8] text-white text-sm font-semibold px-4 py-3 rounded-xl active:bg-[#0096b8] disabled:opacity-40 transition-colors flex items-center justify-center gap-2"
                 >
-                  {actionLoading === "toggle" && (
-                    <span className="w-4 h-4 rounded-full border-2 border-white border-t-transparent animate-spin" />
-                  )}
+                  {actionLoading === "toggle" && <Spinner />}
                   {transaction.is_completed ? "미완료로 변경" : "완료로 변경"}
                 </button>
                 <div className="flex gap-2">
@@ -280,9 +277,7 @@ export default function TransactionDetailModal({
                 disabled={disabled}
                 className="flex-1 bg-[#00b4d8] text-white text-sm font-semibold px-4 py-3 rounded-xl active:bg-[#0096b8] disabled:opacity-40 transition-colors flex items-center justify-center gap-2"
               >
-                {actionLoading === "save" && (
-                  <span className="w-4 h-4 rounded-full border-2 border-white border-t-transparent animate-spin" />
-                )}
+                {actionLoading === "save" && <Spinner />}
                 저장
               </button>
             </div>
