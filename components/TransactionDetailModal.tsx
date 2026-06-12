@@ -3,7 +3,8 @@
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { Spinner } from "@/components/Spinner";
-import { getBadge, type Transaction } from "@/lib/transactions";
+import TaxFieldsInput from "@/components/TaxFieldsInput";
+import { getBadge, type ProofType, type Transaction } from "@/lib/transactions";
 
 type Props = {
   transaction: Transaction;
@@ -27,6 +28,9 @@ export default function TransactionDetailModal({
   const [type, setType] = useState(transaction.type);
   const [counterparty, setCounterparty] = useState(transaction.counterparty);
   const [amount, setAmount] = useState(String(transaction.amount));
+  const [supplyValue, setSupplyValue] = useState(String(transaction.supply_value));
+  const [vatAmount, setVatAmount] = useState(String(transaction.vat_amount));
+  const [proofType, setProofType] = useState<ProofType | "">(transaction.proof_type ?? "");
   const [transactionDate, setTransactionDate] = useState(transaction.transaction_date);
   const [memo, setMemo] = useState(transaction.memo ?? "");
 
@@ -48,6 +52,9 @@ export default function TransactionDetailModal({
         type,
         counterparty: counterparty.trim(),
         amount: parsedAmount,
+        supply_value: Number(supplyValue) || 0,
+        vat_amount: Number(vatAmount) || 0,
+        proof_type: type === "expense" && proofType ? proofType : null,
         transaction_date: transactionDate,
         memo: memo.trim() || null,
       })
@@ -120,6 +127,20 @@ export default function TransactionDetailModal({
                   {transaction.amount.toLocaleString()}원
                 </span>
               </div>
+              {(transaction.supply_value > 0 || transaction.vat_amount > 0) && (
+                <div className="flex items-center justify-between">
+                  <span className="text-gray-500">공급가액 / 부가세</span>
+                  <span>
+                    {transaction.supply_value.toLocaleString()}원 / {transaction.vat_amount.toLocaleString()}원
+                  </span>
+                </div>
+              )}
+              {transaction.proof_type && (
+                <div className="flex items-center justify-between">
+                  <span className="text-gray-500">증빙유형</span>
+                  <span>{transaction.proof_type}</span>
+                </div>
+              )}
               {transaction.memo && (
                 <div className="flex items-start justify-between gap-4">
                   <span className="text-gray-500 shrink-0">메모</span>
@@ -242,6 +263,17 @@ export default function TransactionDetailModal({
                 disabled={disabled}
                 placeholder="금액"
                 className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm text-gray-900 outline-none focus:border-[#00b4d8] transition-colors placeholder:text-gray-400 disabled:opacity-40"
+              />
+
+              <TaxFieldsInput
+                type={type}
+                supplyValue={supplyValue}
+                vatAmount={vatAmount}
+                proofType={proofType}
+                onSupplyValueChange={setSupplyValue}
+                onVatAmountChange={setVatAmount}
+                onProofTypeChange={setProofType}
+                disabled={disabled}
               />
 
               <input

@@ -4,7 +4,8 @@ import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { Toast, useToast } from "@/components/Toast";
 import { Spinner } from "@/components/Spinner";
-import type { TransactionType } from "@/lib/transactions";
+import TaxFieldsInput from "@/components/TaxFieldsInput";
+import type { ProofType, TransactionType } from "@/lib/transactions";
 
 function todayInKST() {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul" }).format(new Date());
@@ -14,10 +15,14 @@ export default function NewTransactionPage() {
   const [type, setType] = useState<TransactionType>("income");
   const [counterparty, setCounterparty] = useState("");
   const [amount, setAmount] = useState("");
+  const [supplyValue, setSupplyValue] = useState("");
+  const [vatAmount, setVatAmount] = useState("");
+  const [proofType, setProofType] = useState<ProofType | "">("");
   const [transactionDate, setTransactionDate] = useState(todayInKST());
   const [memo, setMemo] = useState("");
   const [isCompleted, setIsCompleted] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [formKey, setFormKey] = useState(0);
   const { toast, showToast } = useToast();
 
   const handleSubmit = async () => {
@@ -33,6 +38,9 @@ export default function NewTransactionPage() {
       type,
       counterparty: counterparty.trim(),
       amount: parsedAmount,
+      supply_value: Number(supplyValue) || 0,
+      vat_amount: Number(vatAmount) || 0,
+      proof_type: type === "expense" && proofType ? proofType : null,
       transaction_date: transactionDate,
       memo: memo.trim() || null,
       is_completed: isCompleted,
@@ -48,9 +56,13 @@ export default function NewTransactionPage() {
     setType("income");
     setCounterparty("");
     setAmount("");
+    setSupplyValue("");
+    setVatAmount("");
+    setProofType("");
     setTransactionDate(todayInKST());
     setMemo("");
     setIsCompleted(false);
+    setFormKey((key) => key + 1);
   };
 
   return (
@@ -103,6 +115,18 @@ export default function NewTransactionPage() {
             disabled={saving}
             placeholder="금액"
             className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm text-gray-900 outline-none focus:border-[#00b4d8] transition-colors placeholder:text-gray-400 disabled:opacity-40"
+          />
+
+          <TaxFieldsInput
+            key={formKey}
+            type={type}
+            supplyValue={supplyValue}
+            vatAmount={vatAmount}
+            proofType={proofType}
+            onSupplyValueChange={setSupplyValue}
+            onVatAmountChange={setVatAmount}
+            onProofTypeChange={setProofType}
+            disabled={saving}
           />
 
           <input

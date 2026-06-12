@@ -1,11 +1,23 @@
 export type TransactionType = "income" | "expense";
 
+export type ProofType = "세금계산서" | "신용카드" | "현금영수증(지출증빙)" | "영수증없음";
+
+export const PROOF_TYPES: ProofType[] = [
+  "세금계산서",
+  "신용카드",
+  "현금영수증(지출증빙)",
+  "영수증없음",
+];
+
 export type Transaction = {
   id: string;
   user_id: string;
   type: TransactionType;
   counterparty: string;
   amount: number;
+  supply_value: number;
+  vat_amount: number;
+  proof_type: ProofType | null;
   transaction_date: string;
   memo: string | null;
   is_completed: boolean;
