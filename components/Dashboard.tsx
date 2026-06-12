@@ -4,6 +4,7 @@ import { useCallback, useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { Skeleton } from "@/components/Skeleton";
+import TaxScheduleWidget from "@/components/TaxScheduleWidget";
 import { getBadge, type Transaction } from "@/lib/transactions";
 
 type ViewState = "loading" | "error" | "success";
@@ -56,6 +57,9 @@ export default function Dashboard({ initialTransactions, initialError }: Props) 
   if (state === "loading") {
     return (
       <div className="space-y-4">
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+          <Skeleton />
+        </div>
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
           <Skeleton />
         </div>
@@ -113,6 +117,8 @@ export default function Dashboard({ initialTransactions, initialError }: Props) 
 
   return (
     <div className="space-y-4">
+      <TaxScheduleWidget />
+
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
         <p className="text-sm text-gray-500 mb-1">이번 달 순익</p>
         <p className={`text-3xl font-bold ${profit >= 0 ? "text-[#5f9428]" : "text-[#e85b8a]"}`}>
