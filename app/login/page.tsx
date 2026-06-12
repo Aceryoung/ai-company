@@ -37,7 +37,7 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="flex flex-col min-h-dvh items-center justify-center bg-[#f7f8fc] px-4">
+    <div className="flex flex-col min-h-dvh items-center justify-center bg-[#E0F2F1] px-4">
       <div className="flex flex-col items-center gap-8 w-full max-w-xs">
         <h1 className="text-2xl font-bold text-gray-900">PIN 입력</h1>
 

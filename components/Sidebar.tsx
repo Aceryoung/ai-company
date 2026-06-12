@@ -23,7 +23,7 @@ export default function Sidebar() {
               key={item.href}
               href={item.href}
               className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
-                active ? "bg-[#e8f7fb] text-[#00b4d8]" : "text-gray-500 hover:bg-gray-50 hover:text-gray-700"
+                active ? "bg-[#cdfaf6] text-[#26A69A]" : "text-gray-500 hover:bg-gray-50 hover:text-gray-700"
               }`}
             >
               {item.label}

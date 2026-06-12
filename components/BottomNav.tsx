@@ -21,7 +21,7 @@ export default function BottomNav() {
             key={item.href}
             href={item.href}
             className={`flex-1 flex items-center justify-center h-14 text-sm font-medium transition-colors ${
-              active ? "text-[#00b4d8]" : "text-gray-400"
+              active ? "text-[#26A69A]" : "text-gray-400"
             }`}
           >
             {item.label}

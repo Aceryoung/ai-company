@@ -19,13 +19,13 @@ AI 코딩 에이전트를 위한 디자인 시스템 문서.
 
 ## 색상 토큰
 
-### Primary — Blue
+### Primary — Teal
 ```
-Primary:        #00BFFF   (주 버튼, 활성 탭, 아이콘, 강조 수치)
-Primary Light:  #c8ffff   (primary 버튼 배경 연하게, 활성 탭 배경)
-Primary Hover:  #59a5f5   (active:bg, 눌림 상태)
-Primary Dark:   #0077C2   (primary 버튼 눌림)
-Primary Darker: #00619a   (드물게 사용)
+Primary:        #26A69A   (주 버튼, 활성 탭, 아이콘, 강조 수치)
+Primary Light:  #cdfaf6   (primary 버튼 배경 연하게, 활성 탭 배경)
+Primary Hover:  #D0EBEA   (active:bg, 눌림 상태)
+Primary Dark:   #408d86   (primary 버튼 눌림)
+Primary Darker: #43A49B   (드물게 사용)
 ```
 
 ### Secondary — Green
@@ -45,13 +45,13 @@ Pink Light:     #fde8f0
 ```
 Error / 결석:   red-400 / red-500   (text-red-400, bg-red-50)
 Success / 완료: emerald-600         (text-emerald-600, bg-emerald-50)
-출석:           #00BFFF (primary)
+출석:           #26A69A (primary)
 보강:           purple-600 / purple-50
 ```
 
 ### Neutral
 ```
-Page BG:        #f7f8fc  (bg-[#f7f8fc]) — 모든 페이지 배경
+Page BG:        #E0F2F1  (bg-[#E0F2F1]) — 모든 페이지 배경
 Card BG:        white
 Border:         gray-100 (주), gray-200 (인풋)
 Text Strong:    gray-900
@@ -72,7 +72,7 @@ Text Disabled:  gray-300
 본문:            text-sm text-gray-700
 보조 텍스트:     text-xs text-gray-500
 설명 / 메타:     text-xs text-gray-400
-수치 강조:       text-base font-bold text-[#00BFFF]
+수치 강조:       text-base font-bold text-[#26A69A]
 금액:            text-sm font-semibold text-gray-900
 레이블 (뱃지):   text-[10px] font-medium
 ```
@@ -121,14 +121,14 @@ Text Disabled:  gray-300
 
 **Primary (채움)**
 ```tsx
-className="bg-[#00BFFF] text-white text-sm font-semibold px-4 py-3 rounded-xl
-           active:bg-[#0077C2] disabled:opacity-40 transition-colors"
+className="bg-[#26A69A] text-white text-sm font-semibold px-4 py-3 rounded-xl
+           active:bg-[#408d86] disabled:opacity-40 transition-colors"
 ```
 
 **Primary (연하게) — 가장 자주 쓰임**
 ```tsx
-className="text-[#00BFFF] bg-[#c8ffff] text-xs font-medium px-3 py-1.5 rounded-lg
-           active:bg-[#59a5f5] transition-colors"
+className="text-[#26A69A] bg-[#cdfaf6] text-xs font-medium px-3 py-1.5 rounded-lg
+           active:bg-[#D0EBEA] transition-colors"
 ```
 
 **Neutral (회색)**
@@ -145,7 +145,7 @@ className="bg-[#7db83a] text-white text-sm font-semibold px-3 py-3 rounded-xl
 
 **아이콘 버튼 (원형)**
 ```tsx
-className="w-8 h-8 flex items-center justify-center text-[#00BFFF] rounded-lg
+className="w-8 h-8 flex items-center justify-center text-[#26A69A] rounded-lg
            active:bg-gray-100"
 ```
 
@@ -162,7 +162,7 @@ className="px-4 py-3 bg-gray-50 border-b border-gray-100"
 ### 인풋
 ```tsx
 className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3
-           text-sm text-gray-900 outline-none focus:border-[#00BFFF] transition-colors
+           text-sm text-gray-900 outline-none focus:border-[#26A69A] transition-colors
            placeholder:text-gray-400"
 ```
 
@@ -176,7 +176,7 @@ className="flex-1 text-sm outline-none text-gray-900 placeholder:text-gray-400 b
 출석 상태별:
 ```tsx
 // 출석
-className="bg-[#c8ffff] text-[#00BFFF] px-1.5 py-0.5 rounded text-[10px] font-medium"
+className="bg-[#cdfaf6] text-[#26A69A] px-1.5 py-0.5 rounded text-[10px] font-medium"
 // 보강
 className="bg-purple-50 text-purple-600 px-1.5 py-0.5 rounded text-[10px] font-medium"
 // 결석
@@ -197,13 +197,13 @@ className="min-w-[18px] h-[18px] bg-red-500 text-white text-[10px] font-bold
 className="flex bg-white border-b border-gray-100 px-4 pt-2"
 // 탭 아이템
 className={`flex-1 py-3 text-sm font-semibold transition-colors border-b-2
-  ${isActive ? 'text-[#00BFFF] border-[#00BFFF]' : 'text-gray-400 border-transparent'}`}
+  ${isActive ? 'text-[#26A69A] border-[#26A69A]' : 'text-gray-400 border-transparent'}`}
 ```
 
 ### 필터 칩 (가로 스크롤)
 ```tsx
 // 활성
-className="px-4 py-2 rounded-full text-sm font-medium bg-[#00BFFF] text-white shrink-0"
+className="px-4 py-2 rounded-full text-sm font-medium bg-[#26A69A] text-white shrink-0"
 // 비활성
 className="px-4 py-2 rounded-full text-sm font-medium bg-gray-100 text-gray-600 shrink-0"
 ```
@@ -212,13 +212,13 @@ className="px-4 py-2 rounded-full text-sm font-medium bg-gray-100 text-gray-600 
 ```tsx
 className={({ isActive }) =>
   `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors
-   ${isActive ? 'bg-[#c8ffff] text-[#00BFFF]' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-700'}`
+   ${isActive ? 'bg-[#cdfaf6] text-[#26A69A]' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-700'}`
 }
 ```
 
 ### 로딩 스피너
 ```tsx
-className="w-6 h-6 rounded-full border-2 border-[#00BFFF] border-t-transparent animate-spin"
+className="w-6 h-6 rounded-full border-2 border-[#26A69A] border-t-transparent animate-spin"
 ```
 
 ### 섹션 레이블
@@ -257,7 +257,7 @@ SVG 인라인 방식. Heroicons 스타일 stroke 기반.
 
 ### 모바일 포함 일반 페이지
 ```tsx
-<div className="flex flex-col min-h-dvh bg-[#f7f8fc]">
+<div className="flex flex-col min-h-dvh bg-[#E0F2F1]">
   <PageHeader title="페이지 제목" />
   <div className="flex-1 px-4 py-4 space-y-4 pb-24 md:max-w-3xl md:mx-auto md:w-full">
     {/* 콘텐츠 */}
@@ -287,7 +287,7 @@ SVG 인라인 방식. Heroicons 스타일 stroke 기반.
 ## 금지 사항
 
 - `style={}` 인라인 스타일 사용 금지 (Tailwind 클래스로 대체)
-- `text-blue-*`, `text-cyan-*` 등 기본 Tailwind 색상으로 브랜드 색상 대체 금지 — 반드시 `#00BFFF` 사용
+- `text-blue-*`, `text-cyan-*` 등 기본 Tailwind 색상으로 브랜드 색상 대체 금지 — 반드시 `#26A69A` 사용
 - 새로운 색상 임의 도입 금지 — 위 토큰 범위 내에서 사용
 - `rounded-3xl` 이상 사용 금지
 - `shadow-md`, `shadow-lg` 남용 금지 — 카드는 `shadow-sm`이 기본

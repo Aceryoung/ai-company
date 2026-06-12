@@ -61,7 +61,7 @@ export default function TransactionsList({ initialTransactions, initialError }: 
           <button
             type="button"
             onClick={handleRetry}
-            className="text-[#00b4d8] bg-[#e8f7fb] text-xs font-medium px-3 py-1.5 rounded-lg active:bg-[#d0eff7] transition-colors"
+            className="text-[#26A69A] bg-[#cdfaf6] text-xs font-medium px-3 py-1.5 rounded-lg active:bg-[#D0EBEA] transition-colors"
           >
             다시 시도
           </button>

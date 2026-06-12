@@ -1,13 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import { PROOF_TYPES, type ProofType, type TransactionType } from "@/lib/transactions";
+import { PROOF_TYPES, type ProofType } from "@/lib/transactions";
 
 const INPUT_CLASS =
-  "w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm text-gray-900 outline-none focus:border-[#00b4d8] transition-colors placeholder:text-gray-400 disabled:opacity-40";
+  "w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm text-gray-900 outline-none focus:border-[#26A69A] transition-colors placeholder:text-gray-400 disabled:opacity-40";
 
 type Props = {
-  type: TransactionType;
   supplyValue: string;
   vatAmount: string;
   proofType: ProofType | "";
@@ -18,7 +17,6 @@ type Props = {
 };
 
 export default function TaxFieldsInput({
-  type,
   supplyValue,
   vatAmount,
   proofType,
@@ -69,21 +67,19 @@ export default function TaxFieldsInput({
         />
       </div>
 
-      {type === "expense" && (
-        <select
-          value={proofType}
-          onChange={(e) => onProofTypeChange(e.target.value as ProofType | "")}
-          disabled={disabled}
-          className={INPUT_CLASS}
-        >
-          <option value="">증빙유형 선택 (선택)</option>
-          {PROOF_TYPES.map((proofTypeOption) => (
-            <option key={proofTypeOption} value={proofTypeOption}>
-              {proofTypeOption}
-            </option>
-          ))}
-        </select>
-      )}
+      <select
+        value={proofType}
+        onChange={(e) => onProofTypeChange(e.target.value as ProofType | "")}
+        disabled={disabled}
+        className={INPUT_CLASS}
+      >
+        <option value="">증빙유형 선택 (선택)</option>
+        {PROOF_TYPES.map((proofTypeOption) => (
+          <option key={proofTypeOption} value={proofTypeOption}>
+            {proofTypeOption}
+          </option>
+        ))}
+      </select>
     </>
   );
 }

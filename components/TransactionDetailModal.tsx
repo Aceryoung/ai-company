@@ -54,7 +54,7 @@ export default function TransactionDetailModal({
         amount: parsedAmount,
         supply_value: Number(supplyValue) || 0,
         vat_amount: Number(vatAmount) || 0,
-        proof_type: type === "expense" && proofType ? proofType : null,
+        proof_type: proofType || null,
         transaction_date: transactionDate,
         memo: memo.trim() || null,
       })
@@ -178,7 +178,7 @@ export default function TransactionDetailModal({
                   type="button"
                   onClick={handleToggleStatus}
                   disabled={disabled}
-                  className="w-full bg-[#00b4d8] text-white text-sm font-semibold px-4 py-3 rounded-xl active:bg-[#0096b8] disabled:opacity-40 transition-colors flex items-center justify-center gap-2"
+                  className="w-full bg-[#26A69A] text-white text-sm font-semibold px-4 py-3 rounded-xl active:bg-[#408d86] disabled:opacity-40 transition-colors flex items-center justify-center gap-2"
                 >
                   {actionLoading === "toggle" && <Spinner />}
                   {transaction.is_completed ? "미완료로 변경" : "완료로 변경"}
@@ -188,7 +188,7 @@ export default function TransactionDetailModal({
                     type="button"
                     onClick={() => setEditing(true)}
                     disabled={disabled}
-                    className="flex-1 text-[#00b4d8] bg-[#e8f7fb] text-sm font-medium px-4 py-3 rounded-xl active:bg-[#d0eff7] disabled:opacity-40 transition-colors"
+                    className="flex-1 text-[#26A69A] bg-[#cdfaf6] text-sm font-medium px-4 py-3 rounded-xl active:bg-[#D0EBEA] disabled:opacity-40 transition-colors"
                   >
                     수정
                   </button>
@@ -224,7 +224,7 @@ export default function TransactionDetailModal({
                   disabled={disabled}
                   className={`flex-1 text-sm font-medium px-4 py-3 rounded-xl transition-colors disabled:opacity-40 ${
                     type === "income"
-                      ? "bg-[#e8f7fb] text-[#00b4d8]"
+                      ? "bg-[#cdfaf6] text-[#26A69A]"
                       : "bg-gray-100 text-gray-500"
                   }`}
                 >
@@ -236,7 +236,7 @@ export default function TransactionDetailModal({
                   disabled={disabled}
                   className={`flex-1 text-sm font-medium px-4 py-3 rounded-xl transition-colors disabled:opacity-40 ${
                     type === "expense"
-                      ? "bg-[#e8f7fb] text-[#00b4d8]"
+                      ? "bg-[#cdfaf6] text-[#26A69A]"
                       : "bg-gray-100 text-gray-500"
                   }`}
                 >
@@ -250,7 +250,7 @@ export default function TransactionDetailModal({
                 onChange={(e) => setCounterparty(e.target.value)}
                 disabled={disabled}
                 placeholder="거래처명"
-                className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm text-gray-900 outline-none focus:border-[#00b4d8] transition-colors placeholder:text-gray-400 disabled:opacity-40"
+                className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm text-gray-900 outline-none focus:border-[#26A69A] transition-colors placeholder:text-gray-400 disabled:opacity-40"
               />
 
               <input
@@ -262,11 +262,10 @@ export default function TransactionDetailModal({
                 onChange={(e) => setAmount(e.target.value)}
                 disabled={disabled}
                 placeholder="금액"
-                className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm text-gray-900 outline-none focus:border-[#00b4d8] transition-colors placeholder:text-gray-400 disabled:opacity-40"
+                className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm text-gray-900 outline-none focus:border-[#26A69A] transition-colors placeholder:text-gray-400 disabled:opacity-40"
               />
 
               <TaxFieldsInput
-                type={type}
                 supplyValue={supplyValue}
                 vatAmount={vatAmount}
                 proofType={proofType}
@@ -281,7 +280,7 @@ export default function TransactionDetailModal({
                 value={transactionDate}
                 onChange={(e) => setTransactionDate(e.target.value)}
                 disabled={disabled}
-                className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm text-gray-900 outline-none focus:border-[#00b4d8] transition-colors disabled:opacity-40"
+                className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm text-gray-900 outline-none focus:border-[#26A69A] transition-colors disabled:opacity-40"
               />
 
               <textarea
@@ -290,7 +289,7 @@ export default function TransactionDetailModal({
                 disabled={disabled}
                 placeholder="메모 (선택)"
                 rows={2}
-                className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm text-gray-900 outline-none focus:border-[#00b4d8] transition-colors placeholder:text-gray-400 disabled:opacity-40 resize-none"
+                className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm text-gray-900 outline-none focus:border-[#26A69A] transition-colors placeholder:text-gray-400 disabled:opacity-40 resize-none"
               />
             </div>
 
@@ -307,7 +306,7 @@ export default function TransactionDetailModal({
                 type="button"
                 onClick={handleSave}
                 disabled={disabled}
-                className="flex-1 bg-[#00b4d8] text-white text-sm font-semibold px-4 py-3 rounded-xl active:bg-[#0096b8] disabled:opacity-40 transition-colors flex items-center justify-center gap-2"
+                className="flex-1 bg-[#26A69A] text-white text-sm font-semibold px-4 py-3 rounded-xl active:bg-[#408d86] disabled:opacity-40 transition-colors flex items-center justify-center gap-2"
               >
                 {actionLoading === "save" && <Spinner />}
                 저장
