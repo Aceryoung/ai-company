@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 import { Skeleton } from "@/components/Skeleton";
 import TaxScheduleWidget from "@/components/TaxScheduleWidget";
 import VatWidget from "@/components/VatWidget";
+import TaxWidget from "@/components/TaxWidget";
 import { getBadge, type Transaction } from "@/lib/transactions";
 
 type ViewState = "loading" | "error" | "success";
@@ -140,6 +141,7 @@ export default function Dashboard({ initialTransactions, initialError }: Props) 
       </div>
 
       <VatWidget transactions={transactions} />
+      <TaxWidget transactions={transactions} />
 
       <div className="bg-[#fde8f0] rounded-2xl p-4">
         <p className="text-sm text-[#e85b8a] mb-1">⚠ 미수금 합계</p>
