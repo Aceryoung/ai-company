@@ -5,6 +5,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { Skeleton } from "@/components/Skeleton";
 import TaxScheduleWidget from "@/components/TaxScheduleWidget";
+import VatWidget from "@/components/VatWidget";
 import { getBadge, type Transaction } from "@/lib/transactions";
 
 type ViewState = "loading" | "error" | "success";
@@ -113,7 +114,7 @@ export default function Dashboard({ initialTransactions, initialError }: Props) 
   const arTotal = transactions
     .filter((tx) => tx.type === "income" && !tx.is_completed)
     .reduce((sum, tx) => sum + tx.amount, 0);
-  const recent = transactions.slice(0, 10);
+  const recent = monthly;
 
   return (
     <div className="space-y-4">
@@ -138,13 +139,15 @@ export default function Dashboard({ initialTransactions, initialError }: Props) 
         </div>
       </div>
 
+      <VatWidget transactions={transactions} />
+
       <div className="bg-[#fde8f0] rounded-2xl p-4">
         <p className="text-sm text-[#e85b8a] mb-1">⚠ 미수금 합계</p>
         <p className="text-xl font-semibold text-[#e85b8a]">{arTotal.toLocaleString()}원</p>
       </div>
 
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-        <p className="text-sm font-semibold text-gray-900 px-4 pt-4 pb-2">최근 거래</p>
+        <p className="text-sm font-semibold text-gray-900 px-4 pt-4 pb-2">이번 달 거래</p>
         {recent.length === 0 ? (
           <div className="px-4 pb-4 text-center space-y-3">
             <p className="text-sm text-gray-500">아직 거래가 없습니다</p>
