@@ -112,6 +112,12 @@ export default function Dashboard({ initialTransactions, initialError }: Props) 
     .filter((tx) => tx.type === "expense")
     .reduce((sum, tx) => sum + tx.amount, 0);
   const profit = monthlyIncome - monthlyExpense;
+  const totalIncome = transactions
+    .filter((tx) => tx.type === "income")
+    .reduce((sum, tx) => sum + tx.amount, 0);
+  const totalExpense = transactions
+    .filter((tx) => tx.type === "expense")
+    .reduce((sum, tx) => sum + tx.amount, 0);
   const arTotal = transactions
     .filter((tx) => tx.type === "income" && !tx.is_completed)
     .reduce((sum, tx) => sum + tx.amount, 0);
@@ -131,12 +137,33 @@ export default function Dashboard({ initialTransactions, initialError }: Props) 
 
       <div className="grid grid-cols-2 gap-3">
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
-          <p className="text-sm text-gray-500 mb-1">매출</p>
+          <p className="text-xs text-gray-400 mb-0.5">이번 달 매출</p>
           <p className="text-xl font-semibold text-gray-900">{monthlyIncome.toLocaleString()}원</p>
         </div>
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
-          <p className="text-sm text-gray-500 mb-1">매입</p>
+          <p className="text-xs text-gray-400 mb-0.5">이번 달 매입</p>
           <p className="text-xl font-semibold text-gray-900">{monthlyExpense.toLocaleString()}원</p>
+        </div>
+      </div>
+
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 space-y-3">
+        <p className="text-sm font-semibold text-gray-900">누적 합계 (전체 기간)</p>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <p className="text-xs text-gray-500 mb-0.5">총 매출</p>
+            <p className="text-base font-semibold text-[#26A69A]">{totalIncome.toLocaleString()}원</p>
+          </div>
+          <div>
+            <p className="text-xs text-gray-500 mb-0.5">총 매입</p>
+            <p className="text-base font-semibold text-gray-900">{totalExpense.toLocaleString()}원</p>
+          </div>
+        </div>
+        <div className="border-t border-gray-100 pt-3 flex items-center justify-between">
+          <p className="text-xs text-gray-500">누적 순익</p>
+          <p className={`text-sm font-bold ${totalIncome - totalExpense >= 0 ? "text-[#5f9428]" : "text-[#e85b8a]"}`}>
+            {(totalIncome - totalExpense) > 0 ? "+" : ""}
+            {(totalIncome - totalExpense).toLocaleString()}원
+          </p>
         </div>
       </div>
 
