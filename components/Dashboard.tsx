@@ -14,6 +14,7 @@ type ViewState = "loading" | "error" | "success";
 type Props = {
   initialTransactions: Transaction[];
   initialError: boolean;
+  projectStats?: { count: number; totalEstimated: number };
 };
 
 function currentMonthRangeKST() {
@@ -31,7 +32,7 @@ function currentMonthRangeKST() {
   return { start, end };
 }
 
-export default function Dashboard({ initialTransactions, initialError }: Props) {
+export default function Dashboard({ initialTransactions, initialError, projectStats }: Props) {
   const [transactions, setTransactions] = useState<Transaction[]>(initialTransactions);
   const [state, setState] = useState<ViewState>(initialError ? "error" : "success");
 
@@ -127,52 +128,74 @@ export default function Dashboard({ initialTransactions, initialError }: Props) 
     <div className="space-y-4">
       <TaxScheduleWidget />
 
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
-        <p className="text-sm text-gray-500 mb-1">이번 달 순익</p>
-        <p className={`text-3xl font-bold ${profit >= 0 ? "text-[#5f9428]" : "text-[#e85b8a]"}`}>
+      <div className={`rounded-2xl p-5 ${profit >= 0 ? "bg-[#26A69A]" : "bg-[#e85b8a]"}`}>
+        <p className="text-xs font-medium text-white/70 mb-2 uppercase tracking-widest">이번 달 순익</p>
+        <p className="text-3xl font-bold text-white tracking-tight">
           {profit > 0 ? "+" : ""}
-          {profit.toLocaleString()}원
+          {profit.toLocaleString()}
+          <span className="text-lg font-medium text-white/70 ml-1">원</span>
         </p>
       </div>
 
       <div className="grid grid-cols-2 gap-3">
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
-          <p className="text-xs text-gray-400 mb-0.5">이번 달 매출</p>
-          <p className="text-xl font-semibold text-gray-900">{monthlyIncome.toLocaleString()}원</p>
+          <p className="text-xs text-gray-400 mb-1">이번 달 매출</p>
+          <p className="text-xl font-bold text-[#26A69A]">{monthlyIncome.toLocaleString()}원</p>
         </div>
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
-          <p className="text-xs text-gray-400 mb-0.5">이번 달 매입</p>
-          <p className="text-xl font-semibold text-gray-900">{monthlyExpense.toLocaleString()}원</p>
+          <p className="text-xs text-gray-400 mb-1">이번 달 매입</p>
+          <p className="text-xl font-bold text-[#e85b8a]">{monthlyExpense.toLocaleString()}원</p>
         </div>
       </div>
 
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 space-y-3">
-        <p className="text-sm font-semibold text-gray-900">누적 합계 (전체 기간)</p>
-        <div className="grid grid-cols-2 gap-3">
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">전체 기간 누적</p>
+        <div className="grid grid-cols-3 gap-2">
           <div>
-            <p className="text-xs text-gray-500 mb-0.5">총 매출</p>
-            <p className="text-base font-semibold text-[#26A69A]">{totalIncome.toLocaleString()}원</p>
+            <p className="text-[10px] text-gray-400 mb-0.5">총 매출</p>
+            <p className="text-sm font-bold text-[#26A69A]">{totalIncome.toLocaleString()}원</p>
           </div>
           <div>
-            <p className="text-xs text-gray-500 mb-0.5">총 매입</p>
-            <p className="text-base font-semibold text-gray-900">{totalExpense.toLocaleString()}원</p>
+            <p className="text-[10px] text-gray-400 mb-0.5">총 매입</p>
+            <p className="text-sm font-bold text-gray-700">{totalExpense.toLocaleString()}원</p>
           </div>
-        </div>
-        <div className="border-t border-gray-100 pt-3 flex items-center justify-between">
-          <p className="text-xs text-gray-500">누적 순익</p>
-          <p className={`text-sm font-bold ${totalIncome - totalExpense >= 0 ? "text-[#5f9428]" : "text-[#e85b8a]"}`}>
-            {(totalIncome - totalExpense) > 0 ? "+" : ""}
-            {(totalIncome - totalExpense).toLocaleString()}원
-          </p>
+          <div>
+            <p className="text-[10px] text-gray-400 mb-0.5">누적 순익</p>
+            <p className={`text-sm font-bold ${totalIncome - totalExpense >= 0 ? "text-[#5f9428]" : "text-[#e85b8a]"}`}>
+              {(totalIncome - totalExpense) > 0 ? "+" : ""}{(totalIncome - totalExpense).toLocaleString()}원
+            </p>
+          </div>
         </div>
       </div>
+
+      {projectStats && projectStats.count > 0 && (
+        <Link href="/projects" className="block">
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 flex items-center justify-between">
+            <div>
+              <p className="text-xs text-gray-400 mb-0.5">미정산 프로젝트</p>
+              <p className="text-xl font-semibold text-gray-900">{projectStats.count}건</p>
+            </div>
+            {projectStats.totalEstimated > 0 && (
+              <div className="text-right">
+                <p className="text-xs text-gray-400 mb-0.5">예상 미정산</p>
+                <p className="text-base font-semibold text-[#26A69A]">
+                  {projectStats.totalEstimated.toLocaleString()}원
+                </p>
+              </div>
+            )}
+          </div>
+        </Link>
+      )}
 
       <VatWidget transactions={transactions} />
       <TaxWidget transactions={transactions} />
 
-      <div className="bg-[#fde8f0] rounded-2xl p-4">
-        <p className="text-sm text-[#e85b8a] mb-1">⚠ 미수금 합계</p>
-        <p className="text-xl font-semibold text-[#e85b8a]">{arTotal.toLocaleString()}원</p>
+      <div className="bg-[#fde8f0] rounded-2xl p-4 flex items-center justify-between">
+        <div>
+          <p className="text-xs font-medium text-[#e85b8a]/70 uppercase tracking-wider mb-1">미수금 합계</p>
+          <p className="text-xl font-bold text-[#e85b8a]">{arTotal.toLocaleString()}원</p>
+        </div>
+        <span className="text-2xl opacity-60">⚠</span>
       </div>
 
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">

@@ -5,10 +5,22 @@ import type { Transaction } from "@/lib/transactions";
 
 export default async function Home() {
   const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("transactions")
-    .select("*")
-    .order("transaction_date", { ascending: false });
+  const [{ data, error }, { data: projectsData }] = await Promise.all([
+    supabase.from("transactions").select("*").order("transaction_date", { ascending: false }),
+    supabase
+      .from("projects")
+      .select("id, status, estimated_amount")
+      .neq("status", "settled"),
+  ]);
+
+  const activeProjects = projectsData ?? [];
+  const projectStats = {
+    count: activeProjects.length,
+    totalEstimated: activeProjects.reduce(
+      (sum: number, p: { estimated_amount: number | null }) => sum + (p.estimated_amount ?? 0),
+      0,
+    ),
+  };
 
   return (
     <div className="flex flex-col min-h-dvh bg-[#E0F2F1]">
@@ -20,6 +32,7 @@ export default async function Home() {
         <Dashboard
           initialTransactions={(data as Transaction[]) ?? []}
           initialError={!!error}
+          projectStats={projectStats}
         />
       </div>
     </div>

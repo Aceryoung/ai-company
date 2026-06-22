@@ -21,6 +21,7 @@ export type Transaction = {
   transaction_date: string;
   memo: string | null;
   is_completed: boolean;
+  project_id: string | null;
   created_at: string;
   updated_at: string;
 };
