@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import type { Project, ProjectStatus } from "@/lib/projects";
+import type { Project } from "@/lib/projects";
 import {
   PROJECT_STATUS_LABELS,
   PROJECT_STATUS_BADGE,
@@ -179,6 +179,21 @@ export default function ProjectDetail({ project: initialProject, client, transac
               <div className="flex gap-3">
                 <span className="text-gray-400 w-20 shrink-0">종료일</span>
                 <span className="text-gray-700">{project.end_date}</span>
+              </div>
+            )}
+            {(project.url || project.github_repo) && (
+              <div className="flex gap-3">
+                <span className="text-gray-400 w-20 shrink-0">URL</span>
+                <a
+                  href={project.url ?? `https://github.com/${project.github_repo}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-[#26A69A] font-medium truncate hover:underline"
+                >
+                  {project.url
+                    ? project.url.replace(/^https?:\/\//, "")
+                    : `github.com/${project.github_repo}`}
+                </a>
               </div>
             )}
             {project.memo && (

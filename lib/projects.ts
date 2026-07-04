@@ -12,8 +12,16 @@ export type Project = {
   end_date: string | null;
   estimated_amount: number | null;
   memo: string | null;
+  url: string | null;
+  github_repo: string | null;
   created_at: string;
 };
+
+export function normalizeProjectUrl(input: string): string | null {
+  const trimmed = input.trim();
+  if (!trimmed) return null;
+  return trimmed.startsWith("http") ? trimmed : `https://${trimmed}`;
+}
 
 export const PROJECT_CATEGORY_LABELS: Record<ProjectCategory, string> = {
   personal: "개인",

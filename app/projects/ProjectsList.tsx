@@ -64,12 +64,8 @@ export default function ProjectsList({ projects, clientMap }: Props) {
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
           <div className="divide-y divide-gray-50">
             {filtered.map((project) => (
-              <Link
-                key={project.id}
-                href={`/projects/${project.id}`}
-                className="flex items-center justify-between px-4 py-3 hover:bg-gray-50 transition-colors"
-              >
-                <div className="min-w-0">
+              <div key={project.id} className="flex items-center justify-between px-4 py-3 hover:bg-gray-50 transition-colors">
+                <Link href={`/projects/${project.id}`} className="flex-1 min-w-0">
                   <div className="flex items-center gap-1.5">
                     <span
                       className={`shrink-0 text-[10px] font-medium px-1.5 py-0.5 rounded ${PROJECT_CATEGORY_BADGE[project.category ?? "personal"]}`}
@@ -83,13 +79,25 @@ export default function ProjectsList({ projects, clientMap }: Props) {
                     {project.estimated_amount != null &&
                       ` · ${project.estimated_amount.toLocaleString()}원`}
                   </p>
+                </Link>
+                <div className="shrink-0 ml-3 flex items-center gap-2">
+                  {(project.url || project.github_repo) && (
+                    <a
+                      href={project.url ?? `https://github.com/${project.github_repo}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-[#26A69A] text-xs font-medium bg-[#cdfaf6] px-2 py-0.5 rounded-full"
+                    >
+                      열기 ↗
+                    </a>
+                  )}
+                  <span
+                    className={`text-xs font-medium px-2 py-0.5 rounded-full ${PROJECT_STATUS_BADGE[project.status]}`}
+                  >
+                    {PROJECT_STATUS_LABELS[project.status]}
+                  </span>
                 </div>
-                <span
-                  className={`shrink-0 ml-3 text-xs font-medium px-2 py-0.5 rounded-full ${PROJECT_STATUS_BADGE[project.status]}`}
-                >
-                  {PROJECT_STATUS_LABELS[project.status]}
-                </span>
-              </Link>
+              </div>
             ))}
           </div>
         </div>

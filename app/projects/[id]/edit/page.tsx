@@ -7,7 +7,7 @@ import { Toast, useToast } from "@/components/Toast";
 import { Spinner } from "@/components/Spinner";
 import type { Client } from "@/lib/clients";
 import type { ProjectStatus, ProjectCategory } from "@/lib/projects";
-import { PROJECT_STATUS_LABELS } from "@/lib/projects";
+import { PROJECT_STATUS_LABELS, normalizeProjectUrl } from "@/lib/projects";
 
 const STATUSES: ProjectStatus[] = ["proposal", "active", "completed", "settled"];
 
@@ -24,6 +24,7 @@ export default function EditProjectPage() {
   const [endDate, setEndDate] = useState("");
   const [estimatedAmount, setEstimatedAmount] = useState("");
   const [memo, setMemo] = useState("");
+  const [url, setUrl] = useState("");
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
   const [clients, setClients] = useState<Client[]>([]);
@@ -43,6 +44,7 @@ export default function EditProjectPage() {
       setEndDate(project.end_date ?? "");
       setEstimatedAmount(project.estimated_amount?.toString() ?? "");
       setMemo(project.memo ?? "");
+      setUrl(project.url ?? "");
       setClients((clientsData as Client[]) ?? []);
       setLoading(false);
     });
@@ -65,6 +67,7 @@ export default function EditProjectPage() {
       end_date: endDate || null,
       estimated_amount: estimatedAmount ? Number(estimatedAmount) : null,
       memo: memo.trim() || null,
+      url: normalizeProjectUrl(url),
     }).eq("id", id);
     setSaving(false);
 
@@ -175,6 +178,16 @@ export default function EditProjectPage() {
               />
             </div>
           </div>
+
+          <input
+            type="url"
+            inputMode="url"
+            value={url}
+            onChange={(e) => setUrl(e.target.value)}
+            disabled={saving}
+            placeholder="프로젝트 URL (선택)"
+            className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm text-gray-900 outline-none focus:border-[#26A69A] transition-colors placeholder:text-gray-400 disabled:opacity-40"
+          />
 
           <textarea
             value={memo}
