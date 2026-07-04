@@ -64,6 +64,16 @@ const NAV_GROUPS = [
           </svg>
         ),
       },
+      {
+        href: "/quotes",
+        label: "견적서",
+        icon: (
+          <svg width="16" height="16" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="3" y="2" width="12" height="14" rx="1.5" />
+            <path d="M6 6h6M6 9h6M6 12h4" />
+          </svg>
+        ),
+      },
     ],
   },
   {
