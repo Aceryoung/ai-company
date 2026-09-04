@@ -43,3 +43,4 @@ next-env.d.ts
 # gstack local artifacts
 /.gstack/
 .gstack/
+.google-calendar-token.json
