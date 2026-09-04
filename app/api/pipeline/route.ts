@@ -13,7 +13,7 @@ function claudeAI(prompt: string, cwd?: string, timeoutSec = 60, maxTurns = 3): 
     const promptFile = path.join(TEMP_DIR, `prompt-${Date.now()}.txt`)
     fs.writeFileSync(promptFile, prompt)
     const result = execSync(
-      `cat "${promptFile}" | claude -p --max-turns ${maxTurns} --output-format text --tools "" 2>/dev/null`,
+      `cat "${promptFile}" | /Users/yedeukkyoung/.local/bin/claude -p --max-turns ${maxTurns} --output-format text --tools "" 2>/dev/null`,
       { cwd, encoding: 'utf-8', timeout: timeoutSec * 1000 }
     ).trim()
     fs.unlinkSync(promptFile)

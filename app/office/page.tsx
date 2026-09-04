@@ -24,7 +24,7 @@ type TabId = 'office' | 'dashboard' | 'employees' | 'scenario' | 'pipeline' | 'c
 const TABS: { id: TabId; label: string }[] = [
   { id: 'office',    label: '🏢 사무실' },
   { id: 'dashboard', label: '📊 대시보드' },
-  { id: 'employees', label: '👥 직원 29명' },
+  { id: 'employees', label: '👥 직원 44명' },
   { id: 'scenario',  label: '📋 시나리오' },
   { id: 'pipeline',  label: '🔄 파이프라인' },
   { id: 'command',   label: '💬 지시창' },  // 모바일 전용

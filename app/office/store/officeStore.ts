@@ -61,7 +61,25 @@ export interface Improvement {
   aiPrompt?: string     // AI 코드 수정 프롬프트
 }
 
+export interface EmployeeChatMsg {
+  role: 'user' | 'assistant'
+  content: string
+}
+
 interface OfficeStore {
+  // 직원 대화 (캔버스 클릭 → 페르소나 채팅)
+  selectedEmployee: Employee | null
+  setSelectedEmployee: (emp: Employee | null) => void
+
+  // 직원별 대화 히스토리 (직원 ID → 메시지 배열)
+  employeeChatHistories: Record<string, EmployeeChatMsg[]>
+  addEmployeeChatMsg: (empId: string, msg: EmployeeChatMsg) => void
+  clearEmployeeChatHistory: (empId: string) => void
+
+  // 직원별 이전 대화 요약 (새로고침 후에도 컨텍스트 유지)
+  employeeChatSummaries: Record<string, string>
+  setEmployeeChatSummary: (empId: string, summary: string) => void
+
   // 직원 상태
   empStates: Record<string, EmployeeState>
   setEmpStatus: (id: string, status: EmployeeStatus, bubble?: string) => void
@@ -71,8 +89,14 @@ interface OfficeStore {
 
   // 채팅
   chatLog: ChatMessage[]
+  _chatLogHydrated: boolean
+  hydrateChatLog: () => void
   addLog: (type: ChatMessage['type'], text: string) => void
   setChatLog: (msgs: ChatMessage[]) => void
+
+  // 동적 직원 (회의에서 생성된 부서·직원)
+  dynamicEmployees: Employee[]
+  addDynamicEmployees: (employees: Employee[]) => void
 
   // 시나리오
   scenarioStep: number
@@ -120,6 +144,38 @@ const DEFAULT_PIPELINE: PipelineState = {
 
 export const useOfficeStore = create<OfficeStore>()(
   subscribeWithSelector((set, get) => ({
+    // ── 직원 대화
+    selectedEmployee: null,
+    setSelectedEmployee: (emp) => set({ selectedEmployee: emp }),
+
+    // ── 직원별 대화 히스토리 (localStorage 연동 — hydrate에서 복원)
+    employeeChatHistories: {},
+    addEmployeeChatMsg: (empId, msg) =>
+      set((s) => {
+        const next = {
+          ...s.employeeChatHistories,
+          [empId]: [...(s.employeeChatHistories[empId] ?? []), msg].slice(-20),
+        }
+        try { localStorage.setItem('emp-chat-histories', JSON.stringify(next)) } catch { /* ignore */ }
+        return { employeeChatHistories: next }
+      }),
+    clearEmployeeChatHistory: (empId) =>
+      set((s) => {
+        const next = { ...s.employeeChatHistories }
+        delete next[empId]
+        try { localStorage.setItem('emp-chat-histories', JSON.stringify(next)) } catch { /* ignore */ }
+        return { employeeChatHistories: next }
+      }),
+
+    // ── 직원별 이전 대화 요약 (hydrate에서 복원)
+    employeeChatSummaries: {},
+    setEmployeeChatSummary: (empId, summary) =>
+      set((s) => {
+        const next = { ...s.employeeChatSummaries, [empId]: summary }
+        try { localStorage.setItem('emp-chat-summaries', JSON.stringify(next)) } catch { /* ignore */ }
+        return { employeeChatSummaries: next }
+      }),
+
     // ── 직원
     empStates: {},
 
@@ -164,16 +220,53 @@ export const useOfficeStore = create<OfficeStore>()(
         return { empStates: next }
       }),
 
-    // ── 채팅
+    // ── 채팅 (localStorage 연동 — hydration 안전하게 빈 배열로 시작, useEffect로 복원)
     chatLog: [],
+    _chatLogHydrated: false,
+    hydrateChatLog: () => {
+      if (typeof window === 'undefined') return
+      const s = get()
+      if (s._chatLogHydrated) return
+      const patch: Partial<OfficeStore> = { _chatLogHydrated: true }
+      try {
+        const cl = localStorage.getItem('office-chat-log')
+        if (cl) patch.chatLog = JSON.parse(cl) as ChatMessage[]
+      } catch { /* ignore */ }
+      try {
+        const ch = localStorage.getItem('emp-chat-histories')
+        if (ch) patch.employeeChatHistories = JSON.parse(ch) as Record<string, EmployeeChatMsg[]>
+      } catch { /* ignore */ }
+      try {
+        const cs = localStorage.getItem('emp-chat-summaries')
+        if (cs) patch.employeeChatSummaries = JSON.parse(cs) as Record<string, string>
+      } catch { /* ignore */ }
+      try {
+        const de = localStorage.getItem('dynamic-employees')
+        if (de) patch.dynamicEmployees = JSON.parse(de) as Employee[]
+      } catch { /* ignore */ }
+      set(patch)
+    },
     addLog: (type, text) =>
       set((s) => {
-        const next = [...s.chatLog, { type, text, at: Date.now() }]
-        return { chatLog: next.slice(-60) }
+        const next = [...s.chatLog, { type, text, at: Date.now() }].slice(-60)
+        try { localStorage.setItem('office-chat-log', JSON.stringify(next)) } catch { /* ignore */ }
+        return { chatLog: next }
       }),
-    setChatLog: (msgs) => set({ chatLog: msgs }),
+    setChatLog: (msgs) => {
+      try { localStorage.setItem('office-chat-log', JSON.stringify(msgs)) } catch { /* ignore */ }
+      set({ chatLog: msgs })
+    },
 
     // ── 시나리오
+    // ── 동적 직원 (회의에서 생성)
+    dynamicEmployees: [],
+    addDynamicEmployees: (employees) =>
+      set((s) => {
+        const next = [...s.dynamicEmployees, ...employees]
+        try { localStorage.setItem('dynamic-employees', JSON.stringify(next)) } catch { /* ignore */ }
+        return { dynamicEmployees: next }
+      }),
+
     scenarioStep: -1,
     waitingApproval: false,
     scenarioRunning: false,

@@ -8,7 +8,10 @@ export async function GET() {
   }
 
   const redirectUri = 'http://localhost:3000/api/secretary/callback'
-  const scope = 'https://www.googleapis.com/auth/calendar.readonly'
+  const scope = [
+    'https://www.googleapis.com/auth/calendar.readonly',
+    'https://www.googleapis.com/auth/spreadsheets.readonly',
+  ].join(' ')
 
   const params = new URLSearchParams({
     client_id: clientId,

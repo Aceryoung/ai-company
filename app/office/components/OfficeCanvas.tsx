@@ -1,16 +1,15 @@
 // components/OfficeCanvas.tsx — 픽셀 게임 스타일 사무실 (Canvas 2D) v2
 'use client'
 
-import { useRef, useEffect, useCallback, useState } from 'react'
+import { useRef, useEffect, useCallback, useState, useMemo } from 'react'
 import { useOfficeStore, type EmployeeState } from '../store/officeStore'
 import { EMPLOYEES, STATUS_COLORS, DEPT_COLORS } from '../data/employees'
 
 // ── 상수
 const TILE = 36
 const COLS = 28
-const ROWS = 22
-const CANVAS_W = COLS * TILE
-const CANVAS_H = ROWS * TILE
+const BASE_ROWS = 22          // 기본 캔버스 높이 (정적 직원만 있을 때)
+const STATIC_SEATS = 44       // 정적 좌석 수 (EMPLOYEES + 레드팀)
 const FPS = 12
 
 // ── 스프라이트 색상 팔레트
@@ -25,7 +24,7 @@ interface CharTraits {
   isFemale: boolean
 }
 
-// 29명 각각의 외형 (이름 기반 성별 + 역할 기반 악세서리)
+// 44명 각각의 외형 (이름 기반 성별 + 역할 기반 악세서리)
 const CHAR_TRAITS: CharTraits[] = [
   // 시장조사: 박서준(M), 정유진(F)
   { hairStyle: 'short', skinTone: SKIN_TONES[0], accessory: 'glasses', isFemale: false },
@@ -68,6 +67,36 @@ const CHAR_TRAITS: CharTraits[] = [
   { hairStyle: 'long', skinTone: SKIN_TONES[0], accessory: 'glasses', isFemale: true },
   { hairStyle: 'short', skinTone: SKIN_TONES[1], accessory: 'none', isFemale: false },
   { hairStyle: 'bun', skinTone: SKIN_TONES[2], accessory: 'earring', isFemale: true },
+  // 채용: 윤서영(F), 정민호(M)
+  { hairStyle: 'long', skinTone: SKIN_TONES[3], accessory: 'earring', isFemale: true },
+  { hairStyle: 'short', skinTone: SKIN_TONES[4], accessory: 'tie', isFemale: false },
+  // ── 레드팀 (각 부서 1명씩)
+  // R01 강현석(M) 시장조사
+  { hairStyle: 'spiky', skinTone: SKIN_TONES[5], accessory: 'glasses', isFemale: false },
+  // R02 이태준(M) 영업
+  { hairStyle: 'short', skinTone: SKIN_TONES[6], accessory: 'tie', isFemale: false },
+  // R03 박소현(F) 기획
+  { hairStyle: 'bob', skinTone: SKIN_TONES[7], accessory: 'earring', isFemale: true },
+  // R04 김영철(M) 검수
+  { hairStyle: 'short', skinTone: SKIN_TONES[0], accessory: 'glasses', isFemale: false },
+  // R05 나윤아(F) 개발
+  { hairStyle: 'ponytail', skinTone: SKIN_TONES[1], accessory: 'headset', isFemale: true },
+  // R06 장세훈(M) 배포
+  { hairStyle: 'spiky', skinTone: SKIN_TONES[2], accessory: 'none', isFemale: false },
+  // R07 허지민(F) 고객소통
+  { hairStyle: 'long', skinTone: SKIN_TONES[3], accessory: 'headset', isFemale: true },
+  // R08 신동혁(M) 정산
+  { hairStyle: 'short', skinTone: SKIN_TONES[4], accessory: 'glasses', isFemale: false },
+  // R09 류미경(F) 회고
+  { hairStyle: 'bun', skinTone: SKIN_TONES[5], accessory: 'earring', isFemale: true },
+  // R10 전승우(M) 운영
+  { hairStyle: 'spiky', skinTone: SKIN_TONES[6], accessory: 'glasses', isFemale: false },
+  // R11 홍다은(F) 비서
+  { hairStyle: 'ponytail', skinTone: SKIN_TONES[7], accessory: 'earring', isFemale: true },
+  // R12 오정훈(M) 레포
+  { hairStyle: 'short', skinTone: SKIN_TONES[0], accessory: 'none', isFemale: false },
+  // R13 임수아(F) 채용
+  { hairStyle: 'bob', skinTone: SKIN_TONES[1], accessory: 'glasses', isFemale: true },
 ]
 
 // ── 부서 구역 정의
@@ -102,8 +131,10 @@ const DEPT_ZONES: DeptZone[] = [
   { dept: '레포', label: '🔗 레포', x: 1, y: 16, w: 8, h: 4, floor: '#e6ecf4', floorAlt: '#dee4ec', borderColor: '#5588cc' },
   // 대표실
   { dept: 'CEO', label: '👑 대표실', x: 24, y: 6, w: 3, h: 4, floor: '#f0e8d0', floorAlt: '#e8e0c8', borderColor: '#cc8800' },
+  // 채용
+  { dept: '채용', label: '👤 채용', x: 10, y: 16, w: 5, h: 4, floor: '#f4e6ee', floorAlt: '#ecdee6', borderColor: '#cc4477' },
   // 회의실
-  { dept: '회의실', label: '🏢 회의실', x: 10, y: 16, w: 6, h: 4, floor: '#e0e8f0', floorAlt: '#d8e0e8', borderColor: '#557799' },
+  { dept: '회의실', label: '🏢 회의실', x: 16, y: 16, w: 6, h: 4, floor: '#e0e8f0', floorAlt: '#d8e0e8', borderColor: '#557799' },
 ]
 
 // ── 좌석 위치 (부서별 배치)
@@ -133,8 +164,42 @@ function seatPosition(idx: number): { x: number; y: number } {
     { x: 20, y: 13 }, { x: 22, y: 13 },
     // 레포 (3명)
     { x: 2, y: 18 }, { x: 4, y: 18 }, { x: 6, y: 18 },
+    // 채용 (2명)
+    { x: 11, y: 18 }, { x: 13, y: 18 },
+    // ── 레드팀 (각 부서에 1명씩, 기존 자리 사이에 배치)
+    { x: 5, y: 3 },   // R01 시장조사
+    { x: 10, y: 3 },  // R02 영업
+    { x: 17, y: 3 },  // R03 기획
+    { x: 24, y: 3 },  // R04 검수
+    { x: 9, y: 8 },   // R05 개발
+    { x: 14, y: 8 },  // R06 배포
+    { x: 3, y: 13 },  // R07 고객소통
+    { x: 9, y: 13 },  // R08 정산
+    { x: 15, y: 13 }, // R09 회고
+    { x: 20, y: 8 },  // R10 운영
+    { x: 21, y: 13 }, // R11 비서
+    { x: 5, y: 18 },  // R12 레포
+    { x: 12, y: 18 }, // R13 채용
   ]
-  return seats[idx] ?? { x: 2 + (idx % 12), y: 3 + Math.floor(idx / 12) * 5 }
+  // 정적 직원은 고정 좌석
+  return seats[idx] ?? { x: 2 + ((idx - seats.length) % 8) * 3, y: 23 }
+}
+
+// 동적 직원 좌석: 부서 구역(zone) 내 배치
+function dynamicSeatPosition(empIdx: number, dynamicEmployees: readonly { dept: string }[], dynamicZones: DeptZone[]): { x: number; y: number } {
+  const emp = dynamicEmployees[empIdx]
+  if (!emp) return { x: 2, y: 23 }
+  const zone = dynamicZones.find(z => z.dept === emp.dept)
+  if (!zone) return { x: 2, y: 23 }
+  // 같은 부서의 직원 중 몇 번째인지
+  let posInDept = 0
+  for (let i = 0; i < empIdx; i++) {
+    if (dynamicEmployees[i].dept === emp.dept) posInDept++
+  }
+  return {
+    x: zone.x + 1 + posInDept * 3,   // 구역 내 가로 배치 (3칸 간격)
+    y: zone.y + 2,                     // 구역 내 세로 중앙
+  }
 }
 
 // ── 타일 렌더
@@ -543,12 +608,80 @@ export function OfficeCanvas() {
   const setEmpBubble = useOfficeStore((s) => s.setEmpBubble)
   const tickEmpBubbles = useOfficeStore((s) => s.tickEmpBubbles)
   const addLog = useOfficeStore((s) => s.addLog)
+  const setSelectedEmployee = useOfficeStore((s) => s.setSelectedEmployee)
+  const dynamicEmployees = useOfficeStore((s) => s.dynamicEmployees)
+
+  // 정적 + 동적 직원 합치기
+  const allEmployees = useMemo(() => [...EMPLOYEES, ...dynamicEmployees], [dynamicEmployees])
+
+  // 동적 부서별 직원 그룹 + 좌석 + 캔버스 크기 계산
+  const { ROWS, CANVAS_W, CANVAS_H, dynamicZones } = useMemo(() => {
+    // 동적 부서별로 직원 그룹핑
+    const deptMap = new Map<string, number>()  // dept → 해당 부서 직원 수
+    for (const emp of dynamicEmployees) {
+      deptMap.set(emp.dept, (deptMap.get(emp.dept) ?? 0) + 1)
+    }
+
+    if (deptMap.size === 0) {
+      const r = BASE_ROWS
+      return { ROWS: r, CANVAS_W: COLS * TILE, CANVAS_H: r * TILE, dynamicZones: [] as DeptZone[] }
+    }
+
+    // 각 동적 부서에 구역 할당 (기존 마지막 행 y=16 다음, y=21부터)
+    const zones: DeptZone[] = []
+    const ZONE_COLORS = [
+      { floor: '#f0e6f4', floorAlt: '#e8dee8', borderColor: '#aa55cc' },
+      { floor: '#e6f4e8', floorAlt: '#dee8e0', borderColor: '#44aa66' },
+      { floor: '#f4f0e6', floorAlt: '#e8e4de', borderColor: '#ccaa33' },
+      { floor: '#e6eef4', floorAlt: '#dee6e8', borderColor: '#4488bb' },
+      { floor: '#f4e6e6', floorAlt: '#e8dede', borderColor: '#cc5555' },
+    ]
+    const DEPT_EMOJIS: Record<string, string> = {
+      마케팅: '📣', 디자인: '🎨', 인사: '👥', 법무: '⚖️', 재무: '💵',
+      홍보: '📢', 전략: '🎯', 물류: '📦', 연구: '🔬', 교육: '📚',
+    }
+
+    let zoneX = 1
+    const zoneY = 21  // 기존 부서들(y=16, h=4) 아래, 벽(y=20) 다음
+    let deptIdx = 0
+    for (const [dept, count] of deptMap) {
+      const w = Math.max(count * 3, 5)  // 직원 수에 맞는 너비 (최소 5)
+      const colorSet = ZONE_COLORS[deptIdx % ZONE_COLORS.length]
+      const emoji = DEPT_EMOJIS[dept] ?? '🏢'
+      zones.push({
+        dept,
+        label: `${emoji} ${dept}`,
+        x: zoneX, y: zoneY + Math.floor(deptIdx / 3) * 5,
+        w, h: 4,
+        ...colorSet,
+      })
+      zoneX += w + 1
+      if (zoneX + 5 > COLS - 1) {  // 다음 줄로
+        zoneX = 1
+        deptIdx++  // floor 계산용
+      } else {
+        deptIdx++
+      }
+    }
+
+    // 캔버스 높이 계산
+    const maxZoneBottom = Math.max(...zones.map(z => z.y + z.h))
+    const needed = maxZoneBottom + 2  // 아래 벽 + 여유
+    const r = Math.max(BASE_ROWS, needed)
+    return { ROWS: r, CANVAS_W: COLS * TILE, CANVAS_H: r * TILE, dynamicZones: zones }
+  }, [dynamicEmployees])
+
+  // 좌석 결정 통합 헬퍼: 정적 → seatPosition, 동적 → dynamicSeatPosition
+  const getSeat = useCallback((i: number) => {
+    if (i < STATIC_SEATS) return seatPosition(i)
+    return dynamicSeatPosition(i - STATIC_SEATS, dynamicEmployees, dynamicZones)
+  }, [dynamicEmployees, dynamicZones])
 
   // 초기 직원 좌석 배치
   useEffect(() => {
-    for (let i = 0; i < EMPLOYEES.length; i++) {
-      const emp = EMPLOYEES[i]
-      const seat = seatPosition(i)
+    for (let i = 0; i < allEmployees.length; i++) {
+      const emp = allEmployees[i]
+      const seat = getSeat(i)
       const st = useOfficeStore.getState().empStates[emp.id]
       if (!st || (st.x === 0 && st.y === 0)) {
         useOfficeStore.setState((s) => ({
@@ -566,7 +699,7 @@ export function OfficeCanvas() {
         }))
       }
     }
-  }, [])
+  }, [allEmployees, getSeat])  // eslint-disable-line react-hooks/exhaustive-deps
 
   // 반응형
   useEffect(() => {
@@ -579,7 +712,7 @@ export function OfficeCanvas() {
     })
     obs.observe(el)
     return () => obs.disconnect()
-  }, [])
+  }, [CANVAS_W, CANVAS_H])
 
   // ── 렌더 루프
   const draw = useCallback(() => {
@@ -615,8 +748,9 @@ export function OfficeCanvas() {
       }
     }
 
-    // 부서별 구역 바닥 + 테두리
-    for (const zone of DEPT_ZONES) {
+    // 부서별 구역 바닥 + 테두리 (정적 + 동적)
+    const allZones = [...DEPT_ZONES, ...dynamicZones]
+    for (const zone of allZones) {
       const zx = zone.x * TILE, zy = zone.y * TILE
       const zw = zone.w * TILE, zh = zone.h * TILE
 
@@ -650,8 +784,8 @@ export function OfficeCanvas() {
 
     // ── 가구 배치
     // 각 직원 좌석에 책상
-    for (let i = 0; i < EMPLOYEES.length; i++) {
-      const seat = seatPosition(i)
+    for (let i = 0; i < allEmployees.length; i++) {
+      const seat = getSeat(i)
       drawDesk(ctx, seat.x * TILE, (seat.y - 1) * TILE, frame)
     }
 
@@ -688,7 +822,7 @@ export function OfficeCanvas() {
     ctx.fillRect(ceoX + TILE + 6, ceoY + 2 * TILE + 6, TILE - 12, TILE - 12)
 
     // ── 직원 렌더 (y좌표 순서)
-    const sorted = EMPLOYEES.map((emp, i) => ({ emp, i, st: states[emp.id] }))
+    const sorted = allEmployees.map((emp, i) => ({ emp, i, st: states[emp.id] }))
       .filter(e => e.st)
       .sort((a, b) => (a.st?.y ?? 0) - (b.st?.y ?? 0))
 
@@ -729,7 +863,7 @@ export function OfficeCanvas() {
 
     // ── 선택된 직원 상세 패널
     if (selectedEmp) {
-      const emp = EMPLOYEES.find(e => e.id === selectedEmp)
+      const emp = allEmployees.find(e => e.id === selectedEmp)
       const st = states[selectedEmp] ?? { status: 'idle' as const }
       if (emp) {
         const hasRepos = emp.repos && emp.repos.length > 0
@@ -775,7 +909,7 @@ export function OfficeCanvas() {
     }
 
     tickEmpBubbles()
-  }, [hoveredEmp, selectedEmp, tickEmpBubbles])
+  }, [hoveredEmp, selectedEmp, tickEmpBubbles, ROWS, CANVAS_W, CANVAS_H, allEmployees, getSeat, dynamicZones])
 
   // 애니메이션 루프
   useEffect(() => {
@@ -799,20 +933,21 @@ export function OfficeCanvas() {
     const mx = (e.clientX - rect.left) * (CANVAS_W / rect.width)
     const my = (e.clientY - rect.top) * (CANVAS_H / rect.height)
     return { tileX: Math.floor(mx / TILE), tileY: Math.floor(my / TILE) }
-  }, [])
+  }, [CANVAS_W, CANVAS_H])
 
   const findEmpAt = useCallback((tileX: number, tileY: number) => {
     const states = useOfficeStore.getState().empStates
-    for (let i = 0; i < EMPLOYEES.length; i++) {
-      const emp = EMPLOYEES[i]
+    const all = [...EMPLOYEES, ...useOfficeStore.getState().dynamicEmployees]
+    for (let i = 0; i < all.length; i++) {
+      const emp = all[i]
       const st = states[emp.id]
-      const seat = seatPosition(i)
+      const seat = getSeat(i)
       const ex = st ? Math.floor(st.x) : seat.x
       const ey = st ? Math.floor(st.y) : seat.y
       if (ex === tileX && ey === tileY) return emp
     }
     return null
-  }, [])
+  }, [getSeat])
 
   const handleMouseMove = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
     const t = tileFromEvent(e)
@@ -827,12 +962,25 @@ export function OfficeCanvas() {
     const emp = findEmpAt(t.tileX, t.tileY)
     if (emp) {
       setSelectedEmp(emp.id)
+      setSelectedEmployee(emp)
       setEmpBubble(emp.id, emp.speech, 350)
-      addLog('employee', `[${emp.dept}] ${emp.name}: ${emp.speech}`)
+      addLog('sys', `🗣️ ${emp.name}(${emp.dept} ${emp.role})과 대화를 시작합니다.`)
     } else {
       setSelectedEmp(null)
+      setSelectedEmployee(null)
     }
-  }, [tileFromEvent, findEmpAt, setEmpBubble, addLog])
+  }, [tileFromEvent, findEmpAt, setEmpBubble, addLog, setSelectedEmployee])
+
+  const handleDoubleClick = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
+    const t = tileFromEvent(e)
+    if (!t) return
+    const emp = findEmpAt(t.tileX, t.tileY)
+    if (emp) {
+      setSelectedEmp(emp.id)
+      setSelectedEmployee(emp)
+      addLog('sys', `🗣️ ${emp.name}(${emp.dept} ${emp.role})과 대화를 시작합니다.`)
+    }
+  }, [tileFromEvent, findEmpAt, setSelectedEmployee, addLog])
 
   return (
     <div ref={containerRef} className="flex flex-col items-center justify-center h-full p-2 gap-2 overflow-auto">
@@ -859,6 +1007,7 @@ export function OfficeCanvas() {
         height={CANVAS_H}
         onMouseMove={handleMouseMove}
         onClick={handleClick}
+        onDoubleClick={handleDoubleClick}
         onMouseLeave={() => setHoveredEmp(null)}
         className="rounded-lg border-2 border-[#1e3a5f] cursor-crosshair shadow-[0_0_30px_rgba(68,170,255,0.1)]"
         style={{
@@ -869,9 +1018,9 @@ export function OfficeCanvas() {
       />
 
       <div className="flex items-center gap-4 text-[10px] text-[#6b8cbb]">
-        <span>👥 {EMPLOYEES.length}명</span>
+        <span>👥 {allEmployees.length}명</span>
         <span>🏢 {COLS}×{ROWS}</span>
-        <span>🖱️ 클릭 → 대화</span>
+        <span>🖱️ 클릭=정보 · 더블클릭=대화</span>
         <span>🎮 {FPS}fps</span>
       </div>
     </div>
