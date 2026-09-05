@@ -4,7 +4,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { useOfficeStore } from '../store/officeStore'
 import { EMPLOYEES, DEPT_SKILLS, DEPT_COLORS, getEmployeesByDept } from '../data/employees'
-import type { Employee, AutonomousTask, TaskStep } from '../store/officeStore'
+import type { Employee, AutonomousTask, TaskStep, SwarmPhase } from '../store/officeStore'
 import { useUsageTracker } from '../hooks/useUsageTracker'
 
 const QUICK_CMDS = ['현황 보고', '왜 늦어져?', '회의 소집', '레포 현황', '승인할게', '집중 모드']
@@ -13,6 +13,7 @@ const QUICK_CMDS = ['현황 보고', '왜 늦어져?', '회의 소집', '레포 
 const DEPT_KEYWORDS: Record<string, string[]> = {
   시장조사: ['시장', '트렌드', '조사', '경쟁사', 'scout'],
   영업:     ['영업', '클라이언트', '견적', '문의', 'deal'],
+  마케팅:   ['마케팅', '캠페인', '광고', '콘텐츠', '브랜드', 'seo', 'sns', '홍보'],
   기획:     ['기획', 'prd', '와이어프레임', '스펙', 'plan'],
   검수:     ['검수', '리뷰', 'qa', '테스트', 'guard'],
   개발:     ['개발', '코딩', '빌드', '구현', 'build', 'dev'],
@@ -48,7 +49,12 @@ export function CommandPanel({ isMobile }: Props) {
   const setEmpStatus = useOfficeStore((s) => s.setEmpStatus)
   const addTask = useOfficeStore((s) => s.addTask)
   const updateTaskStep = useOfficeStore((s) => s.updateTaskStep)
+  const updateSwarmPhase = useOfficeStore((s) => s.updateSwarmPhase)
+  const setCurrentPhase = useOfficeStore((s) => s.setCurrentPhase)
   const finishTask = useOfficeStore((s) => s.finishTask)
+  const addTaskMemory = useOfficeStore((s) => s.addTaskMemory)
+  const getRelevantMemories = useOfficeStore((s) => s.getRelevantMemories)
+  const taskMemories = useOfficeStore((s) => s.taskMemories)
   const { logUsage } = useUsageTracker()
   const [input, setInput] = useState('')
   const [isLoading, setIsLoading] = useState(false)
@@ -82,14 +88,13 @@ export function CommandPanel({ isMobile }: Props) {
   // 현재 선택된 직원의 히스토리
   const chatHistory = selectedEmployee ? (chatHistories[selectedEmployee.id] ?? []) : []
 
-  // 직원 선택 시 → 해당 부서 세션으로 전환
+  // 직원 선택 시 → 해당 부서 세션으로 전환 (캔버스 클릭으로 선택한 경우)
   useEffect(() => {
     if (selectedEmployee) {
       setActiveSession(selectedEmployee.dept)
-    } else if (!meetingMode) {
-      setActiveSession('main')
     }
-  }, [selectedEmployee?.id, meetingMode, setActiveSession]) // eslint-disable-line react-hooks/exhaustive-deps
+    // 직원 해제 시에는 세션 자동 전환하지 않음 — 현재 탭 유지
+  }, [selectedEmployee?.id, setActiveSession]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // 직원 선택 시 — 이전 대화가 있고 요약이 없으면 자동 요약
   useEffect(() => {
@@ -154,6 +159,7 @@ export function CommandPanel({ isMobile }: Props) {
           message,
           history: currentHistory,
           previousSummary,
+          ...(selectedEmployee.forceModel ? { forceModel: selectedEmployee.forceModel } : {}),
         }),
       })
 
@@ -263,6 +269,53 @@ export function CommandPanel({ isMobile }: Props) {
     }
   }, [addLog, addDynamicEmployees, dynamicEmployees])
 
+  // ── Phase 4: 학습/메모리 ──
+
+  // 완료된 업무에서 학습 추출 & 메모리 저장
+  const extractAndSaveLearning = useCallback(async (
+    command: string, depts: string[], summary: string
+  ) => {
+    try {
+      const res = await fetch('/api/employee-chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'extract-learning',
+          message: command,
+          dept: depts.join(','),
+          previousSummary: summary,
+          employeeId: '', employeeName: '', role: '', speech: '',
+        }),
+      })
+      const data = await res.json() as { learnings: string[]; keywords: string[] }
+
+      addTaskMemory({
+        id: `mem_${Date.now()}`,
+        command,
+        depts,
+        summary: summary.slice(0, 300),
+        learnings: data.learnings || [],
+        keywords: data.keywords || [],
+        createdAt: Date.now(),
+      })
+
+      addLog('sys', `🧠 학습 완료 — ${data.learnings.length}개 인사이트 저장 (총 메모리: ${taskMemories.length + 1}건)`)
+    } catch {
+      // 학습 실패해도 조용히 — 핵심 기능 아님
+    }
+  }, [addTaskMemory, addLog, taskMemories.length])
+
+  // 관련 과거 메모리를 프롬프트 컨텍스트로 변환
+  const getMemoryContext = useCallback((command: string, depts: string[]): string => {
+    const memories = getRelevantMemories(command, depts)
+    if (memories.length === 0) return ''
+
+    const lines = memories.map(m =>
+      `• [${new Date(m.createdAt).toLocaleDateString('ko-KR')}] "${m.command}" → ${m.learnings.join('; ')}`
+    )
+    return `\n\n■ 과거 업무 기억 (참고):\n${lines.join('\n')}`
+  }, [getRelevantMemories])
+
   // ── 자율 업무 시스템 ──
 
   // 업무 지시 감지 (업무/과제/작성/분석/만들어/조사/검토 등)
@@ -312,6 +365,12 @@ export function CommandPanel({ isMobile }: Props) {
   const executeAutonomousTask = useCallback(async (command: string) => {
     const targetDepts = detectTaskDepts(command)
     const allEmps = [...EMPLOYEES, ...useOfficeStore.getState().dynamicEmployees]
+
+    // Phase 4: 과거 메모리 조회
+    const memoryContext = getMemoryContext(command, targetDepts)
+    if (memoryContext) {
+      addLog('sys', `🧠 관련 과거 업무 기억 ${useOfficeStore.getState().taskMemories.filter(m => m.depts.some(d => targetDepts.includes(d)) || m.keywords.some(k => command.toLowerCase().includes(k.toLowerCase()))).length}건 참조`)
+    }
 
     // 관련 부서 직원 선택 (팀장 + 관련 팀원 1명 + 레드팀)
     const assignees: Employee[] = []
@@ -376,7 +435,7 @@ export function CommandPanel({ isMobile }: Props) {
             role: emp.role,
             speech: emp.speech,
             message: command,
-            previousSummary: prevResult ? `이전 작업 결과:\n${prevResult}` : '',
+            previousSummary: (prevResult ? `이전 작업 결과:\n${prevResult}` : '') + memoryContext,
           }),
         })
         const data = await res.json() as { progress: string; result: string; model?: string }
@@ -438,13 +497,233 @@ export function CommandPanel({ isMobile }: Props) {
 
     addLog('sys', `✅ 자율 업무 완료! (${assignees.length}명 참여, ${targetDepts.join('·')} 부서)`)
 
+    // Phase 4: 학습 추출 (백그라운드)
+    const finalSummary = results.join('\n')
+    extractAndSaveLearning(command, targetDepts, finalSummary)
+
     // 직원들 idle로 복귀
     setTimeout(() => {
       for (const emp of assignees) {
         setEmpStatus(emp.id, 'idle')
       }
     }, 3000)
-  }, [addLog, addTask, updateTaskStep, finishTask, setEmpStatus, setEmpBubble])
+  }, [addLog, addTask, updateTaskStep, finishTask, setEmpStatus, setEmpBubble, getMemoryContext, extractAndSaveLearning])
+
+  // ── Phase 2: 스웜 협업 실행 (복수 부서 페이즈 기반) ──
+
+  // 한 페이즈 내 부서 직원들 실행 (동시 실행 가능한 부서들)
+  const executePhaseForDept = useCallback(async (
+    taskId: string, command: string, dept: string, prevResult: string
+  ): Promise<string> => {
+    const allEmps = [...EMPLOYEES, ...useOfficeStore.getState().dynamicEmployees]
+    const deptEmps = allEmps.filter(e => e.dept === dept)
+    const leader = deptEmps.find(e => e.role === '팀장' || e.role === '수석비서')
+    const worker = deptEmps.find(e => e.role !== '팀장' && e.role !== '수석비서' && e.role !== '레드팀')
+
+    const assignees = [leader, worker].filter(Boolean) as Employee[]
+    if (assignees.length === 0) return `[${dept}] 담당자 없음`
+
+    const results: string[] = []
+    let chainResult = prevResult
+
+    for (const emp of assignees) {
+      setEmpStatus(emp.id, 'work', `스웜 작업 중`)
+      setEmpBubble(emp.id, '🐝 스웜 작업 중...', 999)
+      updateTaskStep(taskId, emp.id, { status: 'working', startedAt: Date.now(), message: '스웜 작업 수행 중...' })
+
+      try {
+        const res = await fetch('/api/employee-chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'autonomous-task',
+            employeeId: emp.id,
+            employeeName: emp.name,
+            dept: emp.dept,
+            role: emp.role,
+            speech: emp.speech,
+            message: command,
+            previousSummary: chainResult ? `이전 단계 결과:\n${chainResult}` : '',
+          }),
+        })
+        const data = await res.json() as { progress: string; result: string; model?: string }
+
+        addLog('employee', `  [${emp.dept}] ${emp.emoji || '👤'} ${emp.name}(${emp.role}): ${data.result}`)
+        setEmpStatus(emp.id, 'done', '✅ 완료!')
+        setEmpBubble(emp.id, '✅ 완료!', 180)
+        updateTaskStep(taskId, emp.id, {
+          status: 'done', message: data.progress, result: data.result, finishedAt: Date.now(),
+        })
+        results.push(data.result)
+        chainResult = results.join('\n')
+
+        await new Promise(r => setTimeout(r, 300))
+      } catch {
+        setEmpStatus(emp.id, 'idle')
+        setEmpBubble(emp.id, '⚠️ 오류', 120)
+        updateTaskStep(taskId, emp.id, { status: 'failed', message: '처리 실패', finishedAt: Date.now() })
+      }
+    }
+
+    // 직원 idle 복귀
+    setTimeout(() => {
+      for (const emp of assignees) setEmpStatus(emp.id, 'idle')
+    }, 2000)
+
+    return results.join('\n')
+  }, [addLog, updateTaskStep, setEmpStatus, setEmpBubble])
+
+  const executeSwarmTask = useCallback(async (command: string) => {
+    const targetDepts = detectTaskDepts(command)
+    const allEmps = [...EMPLOYEES, ...useOfficeStore.getState().dynamicEmployees]
+
+    // Phase 4: 과거 메모리 조회
+    const memoryContext = getMemoryContext(command, targetDepts)
+    if (memoryContext) {
+      addLog('sys', `🧠 관련 과거 업무 기억 참조 중...`)
+    }
+
+    addLog('sys', `🐝 스웜 협업 시작 — ${targetDepts.length}개 부서 협업 모드`)
+    addLog('sys', `📋 AI가 업무 분해 계획을 수립하고 있습니다...`)
+
+    // 1. AI에게 워크플로우 계획 요청
+    let phases: SwarmPhase[] = []
+    try {
+      const planRes = await fetch('/api/employee-chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'swarm-plan',
+          message: command,
+          previousSummary: targetDepts.join(','),
+          employeeId: '', employeeName: '', dept: '', role: '', speech: '',
+        }),
+      })
+      const planData = await planRes.json() as {
+        plan: Array<{ name: string; depts: string[]; description: string }>
+        model?: string
+      }
+
+      phases = planData.plan.map((p, i) => ({
+        id: i,
+        name: p.name,
+        depts: p.depts,
+        description: p.description,
+        status: 'pending' as const,
+      }))
+
+      // 계획 표시
+      addLog('sys', `🗺️ 워크플로우 계획 (${phases.length}단계):`)
+      for (const p of phases) {
+        addLog('sys', `  ${p.id + 1}. [${p.name}] ${p.depts.join(' + ')} — ${p.description}`)
+      }
+    } catch {
+      // 폴백: 부서 순서대로
+      phases = targetDepts.map((d, i) => ({
+        id: i,
+        name: `페이즈 ${i + 1}`,
+        depts: [d],
+        description: `${d} 부서 작업`,
+        status: 'pending' as const,
+      }))
+    }
+
+    // 2. Task 생성 (모든 페이즈의 직원을 steps에 포함)
+    const taskId = `swarm_${Date.now()}`
+    const allSteps: TaskStep[] = []
+    for (const phase of phases) {
+      for (const dept of phase.depts) {
+        const deptEmps = allEmps.filter(e => e.dept === dept)
+        const leader = deptEmps.find(e => e.role === '팀장' || e.role === '수석비서')
+        const worker = deptEmps.find(e => e.role !== '팀장' && e.role !== '수석비서' && e.role !== '레드팀')
+        for (const emp of [leader, worker].filter(Boolean) as Employee[]) {
+          allSteps.push({
+            empId: emp.id, empName: emp.name, dept: emp.dept,
+            status: 'pending', message: `[${phase.name}] 대기 중...`,
+          })
+        }
+      }
+    }
+
+    const task: AutonomousTask = {
+      id: taskId, command, targetDepts, steps: allSteps,
+      status: 'working', createdAt: Date.now(),
+      isSwarm: true, phases, currentPhase: 0,
+    }
+    addTask(task)
+
+    // 3. 페이즈별 순차 실행 (페이즈 내 부서는 병렬)
+    let prevPhaseResult = ''
+
+    for (let pi = 0; pi < phases.length; pi++) {
+      const phase = phases[pi]
+      setCurrentPhase(taskId, pi)
+      updateSwarmPhase(taskId, pi, { status: 'working' })
+
+      addLog('sys', `\n🔄 [페이즈 ${pi + 1}/${phases.length}] ${phase.name} 시작 — ${phase.depts.join(' + ')}`)
+
+      // 페이즈 내 부서들 동시 실행
+      const deptPromises = phase.depts.map(dept =>
+        executePhaseForDept(taskId, command, dept, prevPhaseResult)
+      )
+      const deptResults = await Promise.all(deptPromises)
+      const phaseResult = deptResults.join('\n---\n')
+
+      // 페이즈 결과 요약 (다음 페이즈에 전달)
+      if (pi < phases.length - 1) {
+        try {
+          const summaryRes = await fetch('/api/employee-chat', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              action: 'phase-summary',
+              message: command,
+              dept: phase.name,
+              previousSummary: phaseResult,
+              employeeId: '', employeeName: '', role: '', speech: '',
+            }),
+          })
+          const summaryData = await summaryRes.json() as { summary: string }
+          prevPhaseResult = summaryData.summary
+          addLog('sys', `📌 [${phase.name}] 요약 → ${summaryData.summary}`)
+        } catch {
+          prevPhaseResult = phaseResult.slice(0, 500)
+        }
+      } else {
+        prevPhaseResult = phaseResult
+      }
+
+      updateSwarmPhase(taskId, pi, { status: 'done', result: prevPhaseResult })
+      addLog('sys', `✅ [${phase.name}] 완료!`)
+
+      await new Promise(r => setTimeout(r, 500))
+    }
+
+    // 4. 최종 종합 보고
+    addLog('sys', '\n📋 이수연 비서가 스웜 결과를 종합하고 있습니다...')
+    try {
+      const finalRes = await fetch('/api/employee-chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'task-summary',
+          message: command,
+          previousSummary: prevPhaseResult,
+          employeeId: '', employeeName: '', dept: '', role: '', speech: '',
+        }),
+      })
+      const finalData = await finalRes.json() as { summary: string }
+      addLog('employee', `[비서] 📌 이수연: ${finalData.summary}`)
+      finishTask(taskId, finalData.summary)
+    } catch {
+      finishTask(taskId, '스웜 협업이 완료되었습니다.')
+    }
+
+    addLog('sys', `🐝 스웜 협업 완료! (${phases.length}단계, ${targetDepts.join('·')} 부서)`)
+
+    // Phase 4: 학습 추출 (백그라운드)
+    extractAndSaveLearning(command, targetDepts, prevPhaseResult)
+  }, [addLog, addTask, updateSwarmPhase, setCurrentPhase, finishTask, executePhaseForDept, getMemoryContext, extractAndSaveLearning])
 
   // 회의 종료 — 팀장들 원래 자리로 복귀
   const endMeeting = useCallback(() => {
@@ -517,6 +796,9 @@ export function CommandPanel({ isMobile }: Props) {
     const cmd = preset ?? input.trim()
     if (!cmd || isLoading) return
     setInput('')
+    // textarea 높이 리셋
+    const ta = document.querySelector<HTMLTextAreaElement>('.flex.gap-1\\.5 textarea')
+    if (ta) ta.style.height = 'auto'
 
     // 회의 모드: 안건 입력 → 회의 시작
     if (meetingMode) {
@@ -563,20 +845,21 @@ export function CommandPanel({ isMobile }: Props) {
     if (lower.includes('회의')) {
       setMeetingMode(true)
       setActiveSession('meeting')
-      // 팀장들 원래 좌석 저장 후 회의실로 이동
+      // 팀장+이사+수석비서 원래 좌석 저장 후 회의실로 이동
       const allEmps = [...EMPLOYEES, ...useOfficeStore.getState().dynamicEmployees]
-      const leaders = allEmps.filter(e => e.role === '팀장')
+      const leaders = allEmps.filter(e => e.role === '팀장' || e.role === '이사' || e.role === '수석비서')
       const states = useOfficeStore.getState().empStates
       const seats: Record<string, {x:number,y:number}> = {}
       leaders.forEach((leader, i) => {
         const st = states[leader.id]
-        seats[leader.id] = { x: st?.x ?? 0, y: st?.y ?? 0 }
+        // 원래 좌석: empStates에 있으면 현재 위치, 없으면 homeX/homeY 사용
+        seats[leader.id] = { x: st?.x ?? leader.homeX, y: st?.y ?? leader.homeY }
         const meetX = 17 + (i % 5)
         const meetY = 17 + Math.floor(i / 5)
         setTimeout(() => walkEmpTo(leader.id, meetX, meetY), i * 150)
       })
       setMeetingLeaderSeats(seats)
-      addLog('employee', '[AIDE] 이수연: 팀장 전원 회의실 소집! 🏛️ 안건을 입력해주세요, 대표님.')
+      addLog('employee', '[AIDE] 이수연: 전원 회의실 소집! 🏛️ 안건을 입력해주세요, 대표님.')
       return
     }
     if (lower.includes('승인')) {
@@ -602,7 +885,14 @@ export function CommandPanel({ isMobile }: Props) {
     if (taskCmd) {
       setIsLoading(true)
       try {
-        await executeAutonomousTask(taskCmd)
+        const taskDepts = detectTaskDepts(taskCmd)
+        if (taskDepts.length >= 2) {
+          // Phase 2: 복수 부서 → 스웜 협업 모드
+          await executeSwarmTask(taskCmd)
+        } else {
+          // Phase 1: 단일 부서 → 기존 자율 업무
+          await executeAutonomousTask(taskCmd)
+        }
       } finally {
         setIsLoading(false)
       }
@@ -716,34 +1006,61 @@ export function CommandPanel({ isMobile }: Props) {
         </div>
       )}
 
-      {/* 세션 탭 */}
-      {mounted && visitedSessions.length > 1 && (
-        <div className="flex gap-0.5 px-2 pt-1.5 pb-1 border-b border-[#1e3a5f] shrink-0 overflow-x-auto">
-          {visitedSessions.map((s) => {
-            const label = s === 'main' ? '📋 전체' : s === 'meeting' ? '🏛️ 회의' : `💬 ${s}`
-            const isActive = s === activeSession
+      {/* 팀별 세션 탭 */}
+      {mounted && (
+        <div className="flex gap-0.5 px-1.5 pt-1.5 pb-1 border-b border-[#1e3a5f] shrink-0 overflow-x-auto scrollbar-none">
+          {/* 전체 탭 */}
+          <button
+            onClick={() => { setActiveSession('main'); setMeetingMode(false); setSelectedEmployee(null) }}
+            className={`px-2 py-0.5 text-[10px] font-semibold rounded whitespace-nowrap transition-colors ${
+              activeSession === 'main'
+                ? 'bg-[#4af] text-black'
+                : 'bg-[#0a0e1a] border border-[#1e3a5f] text-[#6b8cbb] hover:border-[#4af] hover:text-[#4af]'
+            }`}
+          >
+            📋 전체
+          </button>
+          {/* 회의 탭 (항상 표시) */}
+          <button
+            onClick={() => { setActiveSession('meeting'); setMeetingMode(true); setSelectedEmployee(null) }}
+            className={`px-2 py-0.5 text-[10px] font-semibold rounded whitespace-nowrap transition-colors ${
+              activeSession === 'meeting'
+                ? 'bg-[#ffa94d] text-black'
+                : 'bg-[#0a0e1a] border border-[#1e3a5f] text-[#6b8cbb] hover:border-[#ffa94d] hover:text-[#ffa94d]'
+            }`}
+          >
+            🏛️ 회의
+          </button>
+          {/* 부서 탭 — 13개 고정 */}
+          {Object.entries(DEPT_COLORS).map(([dept, color]) => {
+            const isActive = activeSession === dept
+            const hasLogs = (useOfficeStore.getState().sessionLogs[dept]?.length ?? 0) > 0
             return (
               <button
-                key={s}
+                key={dept}
                 onClick={() => {
-                  setActiveSession(s)
-                  if (s === 'meeting') { setMeetingMode(true); setSelectedEmployee(null) }
-                  else if (s === 'main') { setMeetingMode(false); setSelectedEmployee(null) }
-                  // 부서 탭 클릭 시 해당 부서 팀장 선택
-                  else {
-                    setMeetingMode(false)
-                    const leader = [...EMPLOYEES, ...useOfficeStore.getState().dynamicEmployees]
-                      .find(e => e.dept === s && e.role === '팀장')
-                    if (leader) setSelectedEmployee(leader)
-                  }
+                  setActiveSession(dept)
+                  setMeetingMode(false)
+                  const leader = [...EMPLOYEES, ...useOfficeStore.getState().dynamicEmployees]
+                    .find(e => e.dept === dept && (e.role === '팀장' || e.role === '이사' || e.role === '수석비서'))
+                  if (leader) setSelectedEmployee(leader)
+                  else setSelectedEmployee(null)
                 }}
-                className={`px-2 py-0.5 text-[10px] font-semibold rounded whitespace-nowrap transition-colors ${
+                className={`px-1.5 py-0.5 text-[9px] font-semibold rounded whitespace-nowrap transition-colors ${
                   isActive
-                    ? 'bg-[#4af] text-black'
-                    : 'bg-[#0a0e1a] border border-[#1e3a5f] text-[#6b8cbb] hover:border-[#4af] hover:text-[#4af]'
+                    ? 'text-black'
+                    : hasLogs
+                      ? 'bg-[#0a0e1a] border text-[#6b8cbb] hover:text-white'
+                      : 'bg-[#0a0e1a] border border-[#1e3a5f33] text-[#3a4a5f] hover:text-[#6b8cbb]'
                 }`}
+                style={isActive
+                  ? { backgroundColor: color }
+                  : hasLogs
+                    ? { borderColor: color + '80' }
+                    : undefined
+                }
               >
-                {label}
+                {dept}
               </button>
             )
           })}
@@ -836,19 +1153,31 @@ export function CommandPanel({ isMobile }: Props) {
       )}
 
       {/* 입력 */}
-      <div className="flex gap-1.5 p-2 border-t-2 border-[#1e3a5f] shrink-0">
-        <input
+      <div className="flex gap-1.5 p-2 border-t-2 border-[#1e3a5f] shrink-0 items-end">
+        <textarea
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && send()}
-          placeholder={meetingMode ? '🏛️ 회의 안건 입력…' : selectedEmployee ? `${selectedEmployee.name}에게 말하기…` : '지시 입력…'}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+              e.preventDefault()
+              send()
+            }
+          }}
+          placeholder={meetingMode ? '🏛️ 회의 안건 입력…' : selectedEmployee ? `${selectedEmployee.name}에게 말하기…` : '지시 입력… (Shift+Enter 줄바꿈)'}
           disabled={isLoading}
-          className="flex-1 px-3 py-2 bg-[#0a0e1a] border border-[#1e3a5f] text-[#e2e8f0] text-sm rounded outline-none focus:border-[#4af] placeholder:text-[#4a6fa5] disabled:opacity-50"
+          rows={1}
+          onInput={(e) => {
+            const t = e.currentTarget
+            t.style.height = 'auto'
+            t.style.height = Math.min(t.scrollHeight, 120) + 'px'
+          }}
+          className="flex-1 px-3 py-2 bg-[#0a0e1a] border border-[#1e3a5f] text-[#e2e8f0] text-sm rounded outline-none focus:border-[#4af] placeholder:text-[#4a6fa5] disabled:opacity-50 resize-none overflow-y-auto"
+          style={{ maxHeight: 120 }}
         />
         <button
           onClick={() => send()}
           disabled={isLoading}
-          className="px-3 py-2 bg-[#4af] text-black text-xs font-bold rounded hover:bg-[#7bf] transition-colors disabled:opacity-50"
+          className="px-3 py-2 bg-[#4af] text-black text-xs font-bold rounded hover:bg-[#7bf] transition-colors disabled:opacity-50 shrink-0"
           style={selectedEmployee ? { background: selectedEmployee.deptColor } : undefined}
         >
           {isLoading ? '…' : '전송'}

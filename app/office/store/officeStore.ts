@@ -16,7 +16,8 @@ export interface Employee {
   emoji: string
   homeX: number
   homeY: number
-  repos?: string[]   // 담당 레포 (예: ['familyproject', 'sentence-collector'])
+  repos?: string[]      // 담당 레포 (예: ['familyproject', 'sentence-collector'])
+  forceModel?: 'claude' // 이 직원은 항상 Claude 사용 (Gemini 폴백 안 함)
 }
 
 export interface EmployeeState {
@@ -80,6 +81,27 @@ export interface TaskStep {
   finishedAt?: number
 }
 
+// Phase 2: 스웜 협업 — 페이즈 기반 멀티 부서
+export interface SwarmPhase {
+  id: number
+  name: string              // "리서치", "기획", "실행", "검증" 등
+  depts: string[]           // 이 페이즈에 참여하는 부서들
+  description: string       // AI가 생성한 이 페이즈 설명
+  status: TaskStatus
+  result?: string           // 페이즈 종합 결과
+}
+
+// Phase 4: 학습/메모리 — 과거 업무 결과 기억
+export interface TaskMemory {
+  id: string
+  command: string           // 원래 업무 지시
+  depts: string[]           // 관련 부서
+  summary: string           // 업무 결과 요약
+  learnings: string[]       // 핵심 교훈/인사이트
+  keywords: string[]        // 검색용 키워드
+  createdAt: number
+}
+
 export interface AutonomousTask {
   id: string
   command: string           // 원래 지시
@@ -89,6 +111,10 @@ export interface AutonomousTask {
   summary?: string          // 최종 종합 보고
   createdAt: number
   finishedAt?: number
+  // Phase 2: 스웜 모드
+  isSwarm?: boolean         // 스웜 협업 여부
+  phases?: SwarmPhase[]     // 페이즈 목록
+  currentPhase?: number     // 현재 실행 중인 페이즈 인덱스
 }
 
 interface OfficeStore {
@@ -153,7 +179,20 @@ interface OfficeStore {
   tasks: AutonomousTask[]
   addTask: (task: AutonomousTask) => void
   updateTaskStep: (taskId: string, empId: string, update: Partial<TaskStep>) => void
+  updateSwarmPhase: (taskId: string, phaseId: number, update: Partial<SwarmPhase>) => void
+  setCurrentPhase: (taskId: string, phase: number) => void
   finishTask: (taskId: string, summary: string) => void
+
+  // Phase 3: 백그라운드 워커
+  bgWorkerEnabled: boolean
+  bgWorkerLastRun: number
+  setBgWorkerEnabled: (v: boolean) => void
+  setBgWorkerLastRun: (t: number) => void
+
+  // Phase 4: 학습/메모리
+  taskMemories: TaskMemory[]
+  addTaskMemory: (memory: TaskMemory) => void
+  getRelevantMemories: (command: string, depts: string[]) => TaskMemory[]
 
   // Claude 한도 현황 (수동 입력, Supabase 동기화)
   claudeLimits: {
@@ -307,6 +346,14 @@ export const useOfficeStore = create<OfficeStore>()(
         const de = localStorage.getItem('dynamic-employees')
         if (de) patch.dynamicEmployees = JSON.parse(de) as Employee[]
       } catch { /* ignore */ }
+      try {
+        const bw = localStorage.getItem('bg-worker-enabled')
+        if (bw) (patch as Record<string, unknown>).bgWorkerEnabled = JSON.parse(bw) as boolean
+      } catch { /* ignore */ }
+      try {
+        const tm = localStorage.getItem('task-memories')
+        if (tm) (patch as Record<string, unknown>).taskMemories = JSON.parse(tm) as TaskMemory[]
+      } catch { /* ignore */ }
       set(patch)
     },
 
@@ -365,6 +412,20 @@ export const useOfficeStore = create<OfficeStore>()(
             : t
         ),
       })),
+    updateSwarmPhase: (taskId, phaseId, update) =>
+      set((s) => ({
+        tasks: s.tasks.map(t =>
+          t.id === taskId && t.phases
+            ? { ...t, phases: t.phases.map(p => p.id === phaseId ? { ...p, ...update } : p) }
+            : t
+        ),
+      })),
+    setCurrentPhase: (taskId, phase) =>
+      set((s) => ({
+        tasks: s.tasks.map(t =>
+          t.id === taskId ? { ...t, currentPhase: phase } : t
+        ),
+      })),
     finishTask: (taskId, summary) =>
       set((s) => ({
         tasks: s.tasks.map(t =>
@@ -375,8 +436,14 @@ export const useOfficeStore = create<OfficeStore>()(
       })),
 
     // ── 시나리오
-    // ── 동적 직원 (회의에서 생성)
-    dynamicEmployees: [],
+    // ── 동적 직원 (회의에서 생성) — 초기화 시 즉시 localStorage 복원
+    dynamicEmployees: (() => {
+      if (typeof window === 'undefined') return []
+      try {
+        const saved = localStorage.getItem('dynamic-employees')
+        return saved ? (JSON.parse(saved) as Employee[]) : []
+      } catch { return [] }
+    })(),
     addDynamicEmployees: (employees) =>
       set((s) => {
         const next = [...s.dynamicEmployees, ...employees]
@@ -411,6 +478,43 @@ export const useOfficeStore = create<OfficeStore>()(
 
     resumeLimit: () =>
       set({ limitHit: false, limitResetTime: null }),
+
+    // ── Phase 3: 백그라운드 워커 — 초기화 시 즉시 localStorage 복원
+    bgWorkerEnabled: (() => {
+      if (typeof window === 'undefined') return false
+      try { const v = localStorage.getItem('bg-worker-enabled'); return v ? JSON.parse(v) as boolean : false } catch { return false }
+    })(),
+    bgWorkerLastRun: 0,
+    setBgWorkerEnabled: (v) => {
+      try { localStorage.setItem('bg-worker-enabled', JSON.stringify(v)) } catch { /* ignore */ }
+      set({ bgWorkerEnabled: v })
+    },
+    setBgWorkerLastRun: (t) => set({ bgWorkerLastRun: t }),
+
+    // ── Phase 4: 학습/메모리 — 초기화 시 즉시 localStorage 복원
+    taskMemories: (() => {
+      if (typeof window === 'undefined') return []
+      try { const v = localStorage.getItem('task-memories'); return v ? JSON.parse(v) as TaskMemory[] : [] } catch { return [] }
+    })(),
+    addTaskMemory: (memory) =>
+      set((s) => {
+        const next = [...s.taskMemories, memory].slice(-30) // 최근 30건만 유지
+        try { localStorage.setItem('task-memories', JSON.stringify(next)) } catch { /* ignore */ }
+        return { taskMemories: next }
+      }),
+    getRelevantMemories: (command, depts) => {
+      const memories = get().taskMemories
+      const lower = command.toLowerCase()
+      // 키워드 + 부서 매칭으로 관련 메모리 찾기
+      return memories
+        .filter(m => {
+          const deptMatch = m.depts.some(d => depts.includes(d))
+          const keywordMatch = m.keywords.some(k => lower.includes(k.toLowerCase()))
+          return deptMatch || keywordMatch
+        })
+        .sort((a, b) => b.createdAt - a.createdAt)
+        .slice(0, 3) // 최대 3개
+    },
 
     // ── Claude 한도 현황
     claudeLimits: {

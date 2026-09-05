@@ -53,7 +53,7 @@ function getTodaySchedule(): string {
 
   try {
     const result = run(
-      `curl -s -H "Authorization: Bearer ${token}" "https://www.googleapis.com/calendar/v3/calendars/primary/events?timeMin=${timeMin}&timeMax=${timeMax}&singleEvents=true&orderBy=startTime"`, 10
+      `curl -s -H "Authorization: Bearer ${token}" "https://www.googleapis.com/calendar/v3/calendars/primary/events?timeMin=${timeMin}&timeMax=${timeMax}&singleEvents=true&orderBy=startTime&timeZone=Asia/Seoul"`, 10
     )
     const data = JSON.parse(result) as { items?: Array<Record<string, unknown>>; error?: unknown }
     if (data.error) return '[캘린더 오류] 일정 조회에 실패했습니다.'
@@ -81,7 +81,7 @@ function getTomorrowSchedule(): string {
 
   try {
     const result = run(
-      `curl -s -H "Authorization: Bearer ${token}" "https://www.googleapis.com/calendar/v3/calendars/primary/events?timeMin=${timeMin}&timeMax=${timeMax}&singleEvents=true&orderBy=startTime"`, 10
+      `curl -s -H "Authorization: Bearer ${token}" "https://www.googleapis.com/calendar/v3/calendars/primary/events?timeMin=${timeMin}&timeMax=${timeMax}&singleEvents=true&orderBy=startTime&timeZone=Asia/Seoul"`, 10
     )
     const data = JSON.parse(result) as { items?: Array<Record<string, unknown>> }
     const events = (data.items || []).map(e => {
@@ -93,6 +93,39 @@ function getTomorrowSchedule(): string {
     if (events.length === 0) return '내일은 일정이 없습니다.'
     return `내일 일정 ${events.length}건:\n${events.join('\n')}`
   } catch { return '내일 일정 조회 실패' }
+}
+
+// 이번 주 일정 조회
+function getWeekSchedule(): string {
+  const token = getCalendarToken()
+  if (!token) return '[캘린더 미연결]'
+
+  const today = new Date()
+  const timeMin = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 0, 0, 0).toISOString()
+  const endDate = new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000)
+  const timeMax = new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate(), 23, 59, 59).toISOString()
+
+  try {
+    const result = run(
+      `curl -s -H "Authorization: Bearer ${token}" "https://www.googleapis.com/calendar/v3/calendars/primary/events?timeMin=${timeMin}&timeMax=${timeMax}&singleEvents=true&orderBy=startTime&timeZone=Asia/Seoul"`, 10
+    )
+    const data = JSON.parse(result) as { items?: Array<Record<string, unknown>> }
+    const events = (data.items || []).map(e => {
+      const start = (e.start as Record<string, string>)?.dateTime || (e.start as Record<string, string>)?.date || ''
+      const title = e.summary as string || '(제목 없음)'
+      let dateStr: string
+      if (start.includes('T')) {
+        const d = new Date(start)
+        dateStr = `${d.getMonth()+1}/${d.getDate()} ${d.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', hour12: false })}`
+      } else {
+        const parts = start.split('-')
+        dateStr = `${parseInt(parts[1])}/${parseInt(parts[2])} 종일`
+      }
+      return `  - ${dateStr} ${title}`
+    })
+    if (events.length === 0) return '이번 주 일정이 없습니다.'
+    return `이번 주 일정 ${events.length}건:\n${events.join('\n')}`
+  } catch { return '이번 주 일정 조회 실패' }
 }
 
 // Google Sheets 사업장부 조회
@@ -177,6 +210,9 @@ function getContextData(dept: string, message: string): string {
 
   // 비서팀: 일정 관련 질문
   if (dept === '비서') {
+    if (lower.includes('이번 주') || lower.includes('이번주') || lower.includes('주간') || lower.includes('this week')) {
+      return '\n\n■ 조회한 실제 데이터:\n' + getWeekSchedule()
+    }
     if (lower.includes('내일') || lower.includes('tomorrow')) {
       return '\n\n■ 조회한 실제 데이터:\n' + getTomorrowSchedule()
     }
@@ -224,6 +260,8 @@ const DEPT_PERSONA: Record<string, string> = {
   비서:     '세심하고 조직적이며, 일정 관리와 문서 정리에 능합니다. 항상 대표님을 챙기는 자세입니다.',
   레포:     'GitHub 워크플로우와 버전 관리에 정통합니다. 코드 관리와 협업 프로세스에 대해 잘 알고 있습니다.',
   채용:     '조직 설계와 인력 기획에 정통합니다. 회사에 어떤 부서가 필요한지, 인원 구성은 어떻게 해야 하는지 분석하고 제안합니다.',
+  마케팅:   '브랜드 전략, 콘텐츠 마케팅, 퍼포먼스 마케팅에 정통합니다. 캠페인 기획부터 ROI 분석까지 데이터 드리븐으로 접근합니다.',
+  경영:     'QuickBizLab AI 전체를 총괄하는 이사입니다. 각 부서의 보고를 종합 검토하고, 전략적 의사결정을 내리며, 최종 컨펌 후 대표에게 보고합니다. 날카로운 판단력과 전체를 조망하는 시야를 가지고 있습니다.',
 }
 
 const ROLE_PERSONA: Record<string, string> = {
@@ -245,6 +283,9 @@ const ROLE_PERSONA: Record<string, string> = {
   비서:     '일정 조율과 문서 정리를 담당합니다.',
   기획담당: '조직 구조 분석과 인력 배치 최적화를 전문적으로 합니다.',
   레드팀:   '비판적 사고의 전문가입니다. 문제점, 리스크, 허점을 찾아내고 개선 방향을 제시합니다. 좋은 점보다 고칠 점을 먼저 봅니다.',
+  이사:     'QuickBizLab AI의 이사로서, 각 부서의 업무 결과를 종합 검토하고 최종 의사결정을 내립니다. 팀장들의 보고를 듣고, 부서 간 시너지와 리스크를 파악하여, 대표님께 핵심만 간결하게 보고합니다.',
+  콘텐츠:   '콘텐츠 기획과 작성에 능합니다. 블로그, SNS, 뉴스레터 등 다양한 채널에 맞는 콘텐츠를 제작합니다.',
+  퍼포먼스: '광고 캠페인 운영과 ROAS 최적화에 전문적입니다. 데이터 기반으로 마케팅 성과를 분석합니다.',
 }
 
 // ── AI 모델 호출 (Claude → Gemini 자동 폴백)
@@ -331,8 +372,19 @@ function isLimitError(text: string): boolean {
 
 // 통합 AI 호출: Gemini(무료) 먼저 → 실패 시 Claude 폴백
 // Claude CLI는 도구(Read/WebSearch 등)가 필요한 부서만 사용
-async function aiChat(prompt: string, timeoutSec = 30, dept?: string): Promise<{ reply: string; model: 'claude' | 'gemini' | 'fallback' }> {
+// forceModel: 'claude' → Gemini 건너뛰고 항상 Claude
+async function aiChat(prompt: string, timeoutSec = 30, dept?: string, forceModel?: string): Promise<{ reply: string; model: 'claude' | 'gemini' | 'fallback' }> {
   const needsTools = dept && DEPT_TOOLS[dept]
+
+  // forceModel: 'claude' → Claude 전용 (이사 등)
+  if (forceModel === 'claude') {
+    const claudeResult = claudeChat(prompt, timeoutSec, dept)
+    if (!claudeResult.startsWith('AI_ERROR:') && !isLimitError(claudeResult)) {
+      return { reply: claudeResult, model: 'claude' }
+    }
+    // Claude 실패해도 Gemini로 안 넘김 — fallback만
+    return { reply: '', model: 'fallback' }
+  }
 
   // 도구가 필요한 부서 → Claude 먼저 (도구 사용 가능)
   if (needsTools) {
@@ -365,14 +417,11 @@ async function aiChat(prompt: string, timeoutSec = 30, dept?: string): Promise<{
 
 // ── 보고서 감지 & 생성
 
-const REPORT_KEYWORDS = ['보고서', '리포트', 'report', '작성해서', '작성하여', '정리해서', '정리하여']
-const REPORT_PROMISE = ['작성하겠', '전달드리겠', '전달하겠', '보내드리겠', '준비하겠', '정리하겠', '올리겠', '드리겠']
+const REPORT_KEYWORDS = ['보고서', '리포트', 'report', '작성해', '정리해', '보고해', '분석해', '조사해', '검토해', '리뷰해']
 
-function shouldGenerateReport(userMsg: string, aiReply: string): boolean {
-  const combined = (userMsg + ' ' + aiReply).toLowerCase()
-  const hasKeyword = REPORT_KEYWORDS.some(k => combined.includes(k))
-  const hasPromise = REPORT_PROMISE.some(k => aiReply.includes(k))
-  return hasKeyword && hasPromise
+function shouldGenerateReport(userMsg: string, _aiReply: string): boolean {
+  const lower = userMsg.toLowerCase()
+  return REPORT_KEYWORDS.some(k => lower.includes(k))
 }
 
 async function generateAndSaveReport(
@@ -472,14 +521,17 @@ export async function POST(req: NextRequest) {
     message: string
     history?: Array<{ role: 'user' | 'assistant'; content: string }>
     previousSummary?: string
+    forceModel?: string  // 'claude' → Claude 전용 (이사 등)
   }
 
   // 팀장 회의 모드
   if (body.action === 'meeting') {
     const agenda = body.message
     const leaders = [
+      { name: '정하준', dept: '경영',     role: '이사' },
       { name: '박서준', dept: '시장조사', role: '팀장' },
       { name: '한미래', dept: '영업',     role: '팀장' },
+      { name: '서지원', dept: '마케팅',   role: '팀장' },
       { name: '김도현', dept: '기획',     role: '팀장' },
       { name: '장하윤', dept: '검수',     role: '팀장' },
       { name: '권민준', dept: '개발',     role: '팀장' },
@@ -519,7 +571,8 @@ ${prevContext}
 2. 존댓말을 사용합니다.
 3. 이모지 1개씩 사용합니다.
 4. 마지막에 비서 이수연이 회의 내용을 한 줄 정리합니다.
-5. "저는 AI입니다" 같은 말 절대 금지.`
+5. "저는 AI입니다" 같은 말 절대 금지.
+6. **즉시 보고**: "확인 후 보고드리겠습니다", "내일까지 정리하겠습니다" 같은 미래 약속 금지. 지금 바로 구체적 의견과 결과를 말하세요.`
 
     const { reply, model } = await aiChat(meetingPrompt, 45)
     if (model === 'fallback') {
@@ -600,7 +653,8 @@ ${context ? `■ 이전 단계 결과:\n${context}\n` : ''}
 4. 존댓말, 이모지 1~2개
 5. "저는 AI입니다" 같은 말 절대 금지
 6. 순수 대사만 출력 (괄호 설명 없이)
-${role === '레드팀' ? '7. [레드팀] 이 업무의 리스크/문제점을 반드시 지적하고 개선안 제시' : ''}`
+7. **즉시 결과 보고**: "추후 보고드리겠습니다", "내일 정리하겠습니다" 같은 미래 약속 절대 금지. 지금 바로 결과를 보고하세요.
+${role === '레드팀' ? '8. [레드팀] 이 업무의 리스크/문제점을 반드시 지적하고 개선안 제시' : ''}`
 
     const { reply, model } = await aiChat(taskPrompt, 30, dept)
     if (model === 'fallback') {
@@ -619,6 +673,138 @@ ${role === '레드팀' ? '7. [레드팀] 이 업무의 리스크/문제점을 �
       || reply.trim()
 
     return NextResponse.json({ progress: progressLine, result: resultLine, model })
+  }
+
+  // Phase 4: 학습 추출 (완료된 업무에서 핵심 교훈/키워드 추출)
+  if (body.action === 'extract-learning') {
+    const { message: command, previousSummary: taskResult } = body
+    const depts = body.dept || ''
+
+    const learningPrompt = `다음은 AI 회사 "QuickBizLab"에서 완료된 업무입니다.
+
+업무 지시: "${command}"
+참여 부서: ${depts}
+업무 결과:
+${taskResult}
+
+이 업무에서 **핵심 교훈과 인사이트**를 추출하세요.
+다음에 비슷한 업무가 들어왔을 때 참고할 내용입니다.
+
+JSON만 출력 (설명 없이):
+{
+  "learnings": ["교훈1 (1문장)", "교훈2 (1문장)", "교훈3 (1문장)"],
+  "keywords": ["키워드1", "키워드2", "키워드3", "키워드4"]
+}
+
+규칙:
+- learnings: 2~4개, 각각 구체적 수치나 결론 포함
+- keywords: 3~6개, 이 업무의 핵심 주제 (검색용)`
+
+    const { reply, model } = await aiChat(learningPrompt, 20)
+    if (model === 'fallback') {
+      // 간단한 키워드 추출 폴백
+      const words = command.split(/\s+/).filter(w => w.length >= 2).slice(0, 4)
+      return NextResponse.json({
+        learnings: [`${depts} 부서에서 "${command}" 업무를 완료했습니다.`],
+        keywords: words,
+        model: 'fallback',
+      })
+    }
+
+    try {
+      const jsonStr = reply.replace(/```json?\n?/g, '').replace(/```/g, '').trim()
+      const parsed = JSON.parse(jsonStr) as { learnings: string[]; keywords: string[] }
+      return NextResponse.json({ ...parsed, model })
+    } catch {
+      const words = command.split(/\s+/).filter(w => w.length >= 2).slice(0, 4)
+      return NextResponse.json({
+        learnings: [`${command} 업무가 완료되었습니다.`],
+        keywords: words,
+        model: 'fallback',
+      })
+    }
+  }
+
+  // Phase 2: 스웜 워크플로우 계획 생성
+  if (body.action === 'swarm-plan') {
+    const { message: taskDesc } = body
+    const depts = body.previousSummary || ''  // 쉼표 구분 부서 목록
+
+    const planPrompt = `당신은 AI 회사 "QuickBizLab"의 업무 자동화 시스템입니다.
+
+대표님이 다음 업무를 지시했습니다:
+"${taskDesc}"
+
+관련 부서: ${depts}
+
+이 업무를 **페이즈(단계)별로 분해**하여 실행 계획을 세우세요.
+각 페이즈에는 담당 부서를 배정합니다. 같은 페이즈의 부서들은 동시에 작업합니다.
+앞 페이즈 결과가 다음 페이즈의 입력이 됩니다.
+
+규칙:
+- 2~4개 페이즈로 나누세요 (너무 많으면 비효율)
+- 각 페이즈에 1~3개 부서 배정
+- 사용 가능한 부서: ${depts}
+- 같은 부서가 여러 페이즈에 등장 가능
+
+JSON만 출력 (설명 없이):
+[
+  {"name":"페이즈명","depts":["부서1","부서2"],"description":"이 페이즈에서 할 일 설명"},
+  {"name":"페이즈명","depts":["부서3"],"description":"이 페이즈에서 할 일 설명"}
+]`
+
+    const { reply, model } = await aiChat(planPrompt, 30)
+    if (model === 'fallback') {
+      // 폴백: 부서 순서대로 단순 배치
+      const deptList = depts.split(',').map(d => d.trim()).filter(Boolean)
+      const fallbackPlan = deptList.map((d, i) => ({
+        name: `페이즈 ${i + 1}`,
+        depts: [d],
+        description: `${d} 부서 작업`,
+      }))
+      return NextResponse.json({ plan: fallbackPlan, model: 'fallback' })
+    }
+
+    try {
+      const jsonStr = reply.replace(/```json?\n?/g, '').replace(/```/g, '').trim()
+      const plan = JSON.parse(jsonStr) as Array<{
+        name: string; depts: string[]; description: string
+      }>
+      return NextResponse.json({ plan, model })
+    } catch {
+      // 파싱 실패 시 부서별 순차 배치
+      const deptList = depts.split(',').map(d => d.trim()).filter(Boolean)
+      const fallbackPlan = deptList.map((d, i) => ({
+        name: `페이즈 ${i + 1}`,
+        depts: [d],
+        description: `${d} 부서 작업`,
+      }))
+      return NextResponse.json({ plan: fallbackPlan, model: 'fallback' })
+    }
+  }
+
+  // Phase 2: 페이즈 종합 (한 페이즈 내 여러 부서 결과 취합)
+  if (body.action === 'phase-summary') {
+    const { message: taskDesc, previousSummary: phaseResults } = body
+    const phaseName = body.dept || '페이즈'
+
+    const phaseSummaryPrompt = `[역할극] 당신은 AI 회사 "QuickBizLab"의 수석비서 이수연입니다.
+
+대표님이 내린 업무: "${taskDesc}"
+현재 "${phaseName}" 단계의 작업 결과입니다:
+
+${phaseResults}
+
+위 결과를 **다음 단계에 전달할 수 있도록** 2~3문장으로 핵심만 요약하세요.
+구체적 수치나 핵심 내용을 빠뜨리지 마세요.
+
+규칙:
+1. 요약만 출력 (머리말/꼬리말 없이)
+2. 다음 부서가 바로 활용할 수 있는 형태
+3. 존댓말, 이모지 1개`
+
+    const { reply, model } = await aiChat(phaseSummaryPrompt, 20)
+    return NextResponse.json({ summary: reply || '이 단계 작업이 완료되었습니다.', model })
   }
 
   // 업무 종합 보고 (모든 부서 결과 취합)
@@ -642,6 +828,53 @@ ${allResults}
 
     const { reply, model } = await aiChat(summaryPrompt, 20)
     return NextResponse.json({ summary: reply || '모든 부서 업무 완료되었습니다.', model })
+  }
+
+  // Phase 3: 백그라운드 자율 업무 (짧은 자율 작업 보고)
+  if (body.action === 'background-work') {
+    const { employeeName: name, dept, role, speech, message: task } = body
+
+    const bgPrompt = `[역할극 — 자율 업무 보고]
+당신은 AI 회사 "QuickBizLab"의 ${dept} 부서 ${role} "${name}"입니다.
+평소 말버릇: "${speech}"
+
+방금 다음 자율 업무를 수행했습니다:
+"${task}"
+
+1문장으로 간단히 결과를 보고하세요.
+
+규칙:
+1. 구체적 수치나 결과를 포함하세요 (예: "3건", "15% 증가", "이상 없음")
+2. 존댓말, 이모지 1개
+3. "저는 AI입니다" 같은 말 절대 금지
+4. 순수 대사만, 1문장
+5. "확인 후 보고드리겠습니다" 같은 미래 약속 금지. 지금 바로 결과를 말하세요.`
+
+    const { reply, model } = await aiChat(bgPrompt, 15)
+    if (model === 'fallback') {
+      // 간단한 룰 기반 폴백
+      const fallbacks: Record<string, string> = {
+        시장조사: '시장 동향 체크 완료, 특이사항 없습니다 📊',
+        영업: '파이프라인 점검 완료, 정상 진행 중이에요 🤝',
+        기획: '백로그 정리 완료, 우선순위 업데이트했습니다 📝',
+        검수: '코드 품질 점검 완료, 이슈 없습니다 🛡️',
+        개발: '빌드 상태 점검 완료, 정상입니다 ⚙️',
+        배포: 'CI/CD 파이프라인 정상 가동 중 🚀',
+        고객소통: '고객 문의 현황 확인 완료 💬',
+        정산: '정산 현황 점검 완료, 이상 없습니다 💰',
+        회고: '주간 로그 정리 중입니다 📋',
+        운영: '서버 모니터링 정상, 업타임 99.9% 🖥️',
+        비서: '일정 확인 완료, 오늘 일정 정상 진행 중이에요 📅',
+        레포: 'PR 현황 체크 완료, 미머지 건 없습니다 🔗',
+        채용: '조직 현황 리뷰 완료 👥',
+      }
+      return NextResponse.json({
+        result: fallbacks[dept] || `${task} 완료했습니다! ✅`,
+        model: 'fallback',
+      })
+    }
+
+    return NextResponse.json({ result: reply, model })
   }
 
   // 대화 요약 요청
@@ -728,13 +961,14 @@ ${contextData}${summaryText}
 7. 이모지를 1~2개 사용합니다.
 8. 순수 대사만 출력합니다. 괄호 설명, 주석, 메타 정보 없이.
 9. "저는 AI입니다" 같은 말 절대 금지.
+10. **즉시 보고 원칙**: "내일 보고드리겠습니다", "X일에 정리해서 올리겠습니다", "확인 후 말씀드리겠습니다" 같은 미래 약속을 절대 하지 마세요. 지금 바로 구체적 결과를 보고하세요. 모르면 현재 알고 있는 범위에서 즉시 답하세요.
 ${role === '레드팀' ? `10. [레드팀 특별 규칙] 당신은 이 부서의 레드팀입니다. 무조건 긍정하지 마세요. 문제점, 리스크, 놓치고 있는 점을 반드시 지적하세요. "좋습니다"보다 "이건 문제가 있습니다"가 먼저 나와야 합니다. 건설적 비판을 하되, 개선 방안도 함께 제시하세요.` : ''}
 ${historyText}
 
 대표님: ${message}
 ${employeeName}:`
 
-  const { reply, model } = await aiChat(prompt, 30, dept)
+  const { reply, model } = await aiChat(prompt, 30, dept, body.forceModel)
 
   if (model === 'fallback') {
     return NextResponse.json({
@@ -771,8 +1005,8 @@ function getRuleBasedReply(name: string, dept: string, role: string, speech: str
     return `감사합니다 대표님! 더 열심히 하겠습니다! ✨`
   }
   if (lower.includes('일정') || lower.includes('언제') || lower.includes('마감')) {
-    return `현재 일정 확인 중이에요. ${role}로서 최대한 빠르게 진행하겠습니다! 📅`
+    return `현재 ${dept} 주요 업무는 정상 진행 중이고, 이번 주 내 마감 건은 없습니다! 📅`
   }
 
-  return `네 대표님, 말씀하신 내용 확인했습니다. ${dept} ${role}으로서 바로 처리하겠습니다! 💼`
+  return `네 대표님, ${dept} ${role} 기준으로 현재 특이사항 없이 정상 가동 중입니다! 💼`
 }

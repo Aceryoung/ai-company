@@ -1,4 +1,4 @@
-// data/employees.ts — 44명 직원 마스터 데이터 (각 부서 레드팀 포함)
+// data/employees.ts — 49명 직원 마스터 데이터 (경영 이사 + 마케팅팀 + 각 부서 레드팀 포함)
 import type { Employee } from '../store/officeStore'
 
 // ── GitHub 레포 목록
@@ -11,8 +11,10 @@ export type RepoName = keyof typeof REPOS
 
 // 부서 색상
 export const DEPT_COLORS: Record<string, string> = {
+  경영:     '#ffd700',
   시장조사: '#ff6b6b',
   영업:     '#ffa94d',
+  마케팅:   '#ff8787',
   기획:     '#ffd43b',
   검수:     '#69db7c',
   개발:     '#4dabf7',
@@ -83,6 +85,15 @@ export const EMPLOYEES: Employee[] = [
   // ── 채용팀 (HIRE) — 조직 설계·인력 기획
   { id: 'E30', name: '윤서영', code: 'HIRE',   role: '팀장', dept: '채용', deptColor: DEPT_COLORS.채용, speech: '조직 구조 분석 중이에요', emoji: '🏗️', homeX: 5, homeY: 11 },
   { id: 'E31', name: '정민호', code: 'HIRE2',  role: '기획담당', dept: '채용', deptColor: DEPT_COLORS.채용, speech: '인력 배치 최적화 검토 중', emoji: '🧩', homeX: 6, homeY: 11 },
+
+  // ── 경영 (이사 — Claude 토큰 전용, 전 부서 최종 검토·컨펌)
+  { id: 'D01', name: '정하준', code: 'DIRECTOR', role: '이사', dept: '경영', deptColor: DEPT_COLORS.경영, speech: '전 부서 보고를 종합 검토 중입니다', emoji: '👔', homeX: 1, homeY: 11, forceModel: 'claude' as const },
+
+  // ── 마케팅팀 (MKT) — 브랜드·콘텐츠·퍼포먼스 마케팅
+  { id: 'M01', name: '서지원', code: 'MKT',  role: '팀장', dept: '마케팅', deptColor: DEPT_COLORS.마케팅, speech: '캠페인 성과 분석 중', emoji: '📣', homeX: 2, homeY: 11 },
+  { id: 'M02', name: '한예린', code: 'MKT2', role: '콘텐츠', dept: '마케팅', deptColor: DEPT_COLORS.마케팅, speech: '블로그 원고 작성 중', emoji: '✍️', homeX: 3, homeY: 11 },
+  { id: 'M03', name: '박준형', code: 'MKT3', role: '퍼포먼스', dept: '마케팅', deptColor: DEPT_COLORS.마케팅, speech: 'ROAS 최적화 진행 중', emoji: '📈', homeX: 4, homeY: 11 },
+  { id: 'RM1', name: '김나현', code: 'RED_MKT', role: '레드팀', dept: '마케팅', deptColor: DEPT_COLORS.마케팅, speech: '이 캠페인 ROI 근거가 약해요', emoji: '🔴', homeX: 4, homeY: 12 },
 
   // ── 레드팀 (각 부서 1명씩 — 비판적 검토·반대 의견 전담)
   { id: 'R01', name: '강현석', code: 'RED_SCOUT',  role: '레드팀', dept: '시장조사', deptColor: DEPT_COLORS.시장조사, speech: '그 데이터 근거가 약한데요', emoji: '🔴', homeX: 3, homeY: 1 },

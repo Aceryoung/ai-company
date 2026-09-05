@@ -9,7 +9,7 @@ import { EMPLOYEES, STATUS_COLORS, DEPT_COLORS } from '../data/employees'
 const TILE = 36
 const COLS = 28
 const BASE_ROWS = 22          // 기본 캔버스 높이 (정적 직원만 있을 때)
-const STATIC_SEATS = 44       // 정적 좌석 수 (EMPLOYEES + 레드팀)
+const STATIC_SEATS = 49       // 정적 좌석 수 (이사 + 마케팅 + EMPLOYEES + 레드팀)
 const FPS = 12
 
 // ── 스프라이트 색상 팔레트
@@ -24,7 +24,7 @@ interface CharTraits {
   isFemale: boolean
 }
 
-// 44명 각각의 외형 (이름 기반 성별 + 역할 기반 악세서리)
+// 49명 각각의 외형 (이름 기반 성별 + 역할 기반 악세서리)
 const CHAR_TRAITS: CharTraits[] = [
   // 시장조사: 박서준(M), 정유진(F)
   { hairStyle: 'short', skinTone: SKIN_TONES[0], accessory: 'glasses', isFemale: false },
@@ -70,6 +70,13 @@ const CHAR_TRAITS: CharTraits[] = [
   // 채용: 윤서영(F), 정민호(M)
   { hairStyle: 'long', skinTone: SKIN_TONES[3], accessory: 'earring', isFemale: true },
   { hairStyle: 'short', skinTone: SKIN_TONES[4], accessory: 'tie', isFemale: false },
+  // 경영: Claude(AI 이사)
+  { hairStyle: 'short', skinTone: SKIN_TONES[0], accessory: 'tie', isFemale: false },
+  // 마케팅: 서지원(F), 한예린(F), 박준형(M), 김나현(F-레드팀)
+  { hairStyle: 'ponytail', skinTone: SKIN_TONES[1], accessory: 'earring', isFemale: true },
+  { hairStyle: 'long', skinTone: SKIN_TONES[2], accessory: 'none', isFemale: true },
+  { hairStyle: 'spiky', skinTone: SKIN_TONES[3], accessory: 'glasses', isFemale: false },
+  { hairStyle: 'bob', skinTone: SKIN_TONES[4], accessory: 'earring', isFemale: true },
   // ── 레드팀 (각 부서 1명씩)
   // R01 강현석(M) 시장조사
   { hairStyle: 'spiky', skinTone: SKIN_TONES[5], accessory: 'glasses', isFemale: false },
@@ -135,6 +142,10 @@ const DEPT_ZONES: DeptZone[] = [
   { dept: '채용', label: '👤 채용', x: 10, y: 16, w: 5, h: 4, floor: '#f4e6ee', floorAlt: '#ecdee6', borderColor: '#cc4477' },
   // 회의실
   { dept: '회의실', label: '🏢 회의실', x: 16, y: 16, w: 6, h: 4, floor: '#e0e8f0', floorAlt: '#d8e0e8', borderColor: '#557799' },
+  // 경영실 (이사)
+  { dept: '경영', label: '👔 경영', x: 24, y: 11, w: 3, h: 4, floor: '#f5ecd0', floorAlt: '#ede4c8', borderColor: '#ccaa00' },
+  // 마케팅
+  { dept: '마케팅', label: '📣 마케팅', x: 23, y: 16, w: 4, h: 4, floor: '#f4e0e0', floorAlt: '#ecd8d8', borderColor: '#cc4466' },
 ]
 
 // ── 좌석 위치 (부서별 배치)
@@ -166,6 +177,13 @@ function seatPosition(idx: number): { x: number; y: number } {
     { x: 2, y: 18 }, { x: 4, y: 18 }, { x: 6, y: 18 },
     // 채용 (2명)
     { x: 11, y: 18 }, { x: 13, y: 18 },
+    // ── 경영 이사 (1명)
+    { x: 25, y: 13 }, // D01 Claude 이사
+    // ── 마케팅 (3명 + 레드팀 1명)
+    { x: 24, y: 18 }, // M01 마케팅 팀장
+    { x: 25, y: 18 }, // M02 콘텐츠
+    { x: 23, y: 18 }, // M03 퍼포먼스
+    { x: 26, y: 18 }, // RM1 마케팅 레드팀
     // ── 레드팀 (각 부서에 1명씩, 기존 자리 사이에 배치)
     { x: 5, y: 3 },   // R01 시장조사
     { x: 10, y: 3 },  // R02 영업
