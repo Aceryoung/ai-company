@@ -4,7 +4,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { useOfficeStore } from '../store/officeStore'
 import { EMPLOYEES, DEPT_SKILLS, DEPT_COLORS, getEmployeesByDept } from '../data/employees'
-import type { Employee } from '../store/officeStore'
+import type { Employee, AutonomousTask, TaskStep } from '../store/officeStore'
 import { useUsageTracker } from '../hooks/useUsageTracker'
 
 const QUICK_CMDS = ['현황 보고', '왜 늦어져?', '회의 소집', '레포 현황', '승인할게', '집중 모드']
@@ -44,6 +44,11 @@ export function CommandPanel({ isMobile }: Props) {
   const setActiveSession = useOfficeStore((s) => s.setActiveSession)
   const addSessionLog = useOfficeStore((s) => s.addSessionLog)
   const walkEmpTo = useOfficeStore((s) => s.walkEmpTo)
+  const setEmpBubble = useOfficeStore((s) => s.setEmpBubble)
+  const setEmpStatus = useOfficeStore((s) => s.setEmpStatus)
+  const addTask = useOfficeStore((s) => s.addTask)
+  const updateTaskStep = useOfficeStore((s) => s.updateTaskStep)
+  const finishTask = useOfficeStore((s) => s.finishTask)
   const { logUsage } = useUsageTracker()
   const [input, setInput] = useState('')
   const [isLoading, setIsLoading] = useState(false)
@@ -258,6 +263,189 @@ export function CommandPanel({ isMobile }: Props) {
     }
   }, [addLog, addDynamicEmployees, dynamicEmployees])
 
+  // ── 자율 업무 시스템 ──
+
+  // 업무 지시 감지 (업무/과제/작성/분석/만들어/조사/검토 등)
+  const TASK_PATTERNS = [
+    /(.+?)\s*(?:해줘|해주세요|해 줘|해 주세요|부탁해|부탁합니다)$/,
+    /(.+?)\s*(?:작성|분석|조사|검토|준비|기획|설계|개발|배포|테스트|리뷰)\s*(?:해|하세요|해줘|해주세요|부탁)/,
+    /(.+?)\s*(?:보고서|리포트|전략|계획|방안)\s*(?:만들|작성|준비)/,
+  ]
+
+  const detectTask = (text: string): string | null => {
+    // 짧은 인사말이나 질문은 업무가 아님
+    if (text.length < 8) return null
+    if (/^(안녕|하이|뭐해|현황|보고|승인|집중|회의|늦)/.test(text)) return null
+    // 부서 생성은 별도 처리
+    if (detectDeptCreation(text)) return null
+
+    for (const p of TASK_PATTERNS) {
+      if (p.test(text)) return text
+    }
+    // "~해줘" 패턴이 아니더라도, 부서 키워드 + 동사가 있으면 업무로 간주
+    const hasDeptKeyword = Object.values(DEPT_KEYWORDS).flat().some(k => text.toLowerCase().includes(k))
+    const hasActionVerb = /(?:작성|분석|조사|검토|준비|기획|설계|개발|배포|정리|수집|파악|확인|처리)/.test(text)
+    if (hasDeptKeyword && hasActionVerb) return text
+
+    return null
+  }
+
+  // 업무 관련 부서 감지 (복수 부서 가능)
+  const detectTaskDepts = (text: string): string[] => {
+    const lower = text.toLowerCase()
+    const depts: string[] = []
+    for (const [dept, keywords] of Object.entries(DEPT_KEYWORDS)) {
+      if (keywords.some(k => lower.includes(k))) depts.push(dept)
+    }
+    // 부서 키워드 없으면 내용으로 추론
+    if (depts.length === 0) {
+      if (/전략|마케팅|홍보|브랜드/.test(text)) depts.push('기획', '영업')
+      else if (/코드|개발|구현|빌드/.test(text)) depts.push('개발', '검수')
+      else if (/고객|피드백|소통/.test(text)) depts.push('고객소통')
+      else if (/보고서|리포트|분석/.test(text)) depts.push('기획')
+      else depts.push('비서')  // 기본: 비서가 처리
+    }
+    return [...new Set(depts)]
+  }
+
+  // 자율 업무 실행
+  const executeAutonomousTask = useCallback(async (command: string) => {
+    const targetDepts = detectTaskDepts(command)
+    const allEmps = [...EMPLOYEES, ...useOfficeStore.getState().dynamicEmployees]
+
+    // 관련 부서 직원 선택 (팀장 + 관련 팀원 1명 + 레드팀)
+    const assignees: Employee[] = []
+    for (const dept of targetDepts) {
+      const deptEmps = allEmps.filter(e => e.dept === dept)
+      const leader = deptEmps.find(e => e.role === '팀장' || e.role === '수석비서')
+      const worker = deptEmps.find(e => e.role !== '팀장' && e.role !== '수석비서' && e.role !== '레드팀')
+      const red = deptEmps.find(e => e.role === '레드팀')
+      if (leader) assignees.push(leader)
+      if (worker) assignees.push(worker)
+      if (red) assignees.push(red)
+    }
+
+    if (assignees.length === 0) {
+      addLog('sys', '⚠️ 관련 부서를 찾지 못했습니다.')
+      return
+    }
+
+    // Task 생성
+    const taskId = `task_${Date.now()}`
+    const steps: TaskStep[] = assignees.map(emp => ({
+      empId: emp.id,
+      empName: emp.name,
+      dept: emp.dept,
+      status: 'pending' as const,
+      message: '대기 중...',
+    }))
+
+    const task: AutonomousTask = {
+      id: taskId,
+      command,
+      targetDepts,
+      steps,
+      status: 'working',
+      createdAt: Date.now(),
+    }
+    addTask(task)
+
+    addLog('sys', `🚀 자율 업무 시작 — ${targetDepts.join(', ')} 부서 ${assignees.length}명 투입`)
+
+    // 순차 실행 (각 직원이 자기 파트 수행)
+    const results: string[] = []
+    let prevResult = ''
+
+    for (const emp of assignees) {
+      // 직원 상태 업데이트 (작업 중)
+      setEmpStatus(emp.id, 'work', `${command.slice(0, 10)}... 작업 중`)
+      setEmpBubble(emp.id, '💼 작업 중...', 999)
+      updateTaskStep(taskId, emp.id, { status: 'working', startedAt: Date.now(), message: '작업 수행 중...' })
+
+      addLog('sys', `⏳ [${emp.dept}] ${emp.name}(${emp.role})이 작업을 시작합니다...`)
+
+      try {
+        const res = await fetch('/api/employee-chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'autonomous-task',
+            employeeId: emp.id,
+            employeeName: emp.name,
+            dept: emp.dept,
+            role: emp.role,
+            speech: emp.speech,
+            message: command,
+            previousSummary: prevResult ? `이전 작업 결과:\n${prevResult}` : '',
+          }),
+        })
+        const data = await res.json() as { progress: string; result: string; model?: string }
+
+        if (data.model === 'gemini') {
+          addLog('sys', '🟡 Gemini Flash 사용')
+        }
+
+        // 결과 표시
+        await new Promise(r => setTimeout(r, 300))
+        addLog('employee', `[${emp.dept}] ${emp.emoji || '👤'} ${emp.name}(${emp.role}): ${data.result}`)
+
+        // 상태 업데이트
+        setEmpStatus(emp.id, 'done', '✅ 완료!')
+        setEmpBubble(emp.id, '✅ 완료!', 180)
+        updateTaskStep(taskId, emp.id, {
+          status: 'done',
+          message: data.progress,
+          result: data.result,
+          finishedAt: Date.now(),
+        })
+
+        results.push(`[${emp.dept}/${emp.name}] ${data.result}`)
+        prevResult = results.join('\n---\n')
+
+        // 다음 직원 전 짧은 딜레이
+        await new Promise(r => setTimeout(r, 500))
+      } catch {
+        setEmpStatus(emp.id, 'idle')
+        setEmpBubble(emp.id, '⚠️ 오류', 120)
+        updateTaskStep(taskId, emp.id, { status: 'failed', message: '처리 실패', finishedAt: Date.now() })
+        addLog('sys', `⚠️ [${emp.dept}] ${emp.name} 작업 중 오류 발생`)
+      }
+    }
+
+    // 최종 종합 보고 (비서가 취합)
+    if (results.length > 1) {
+      addLog('sys', '📋 이수연 비서가 결과를 종합하고 있습니다...')
+      try {
+        const summaryRes = await fetch('/api/employee-chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'task-summary',
+            employeeId: '', employeeName: '', dept: '', role: '', speech: '',
+            message: command,
+            previousSummary: results.join('\n\n'),
+          }),
+        })
+        const summaryData = await summaryRes.json() as { summary: string }
+        addLog('employee', `[비서] 📌 이수연: ${summaryData.summary}`)
+        finishTask(taskId, summaryData.summary)
+      } catch {
+        finishTask(taskId, '업무가 완료되었습니다.')
+      }
+    } else {
+      finishTask(taskId, results[0] || '업무가 완료되었습니다.')
+    }
+
+    addLog('sys', `✅ 자율 업무 완료! (${assignees.length}명 참여, ${targetDepts.join('·')} 부서)`)
+
+    // 직원들 idle로 복귀
+    setTimeout(() => {
+      for (const emp of assignees) {
+        setEmpStatus(emp.id, 'idle')
+      }
+    }, 3000)
+  }, [addLog, addTask, updateTaskStep, finishTask, setEmpStatus, setEmpBubble])
+
   // 회의 종료 — 팀장들 원래 자리로 복귀
   const endMeeting = useCallback(() => {
     setMeetingMode(false)
@@ -360,8 +548,9 @@ export function CommandPanel({ isMobile }: Props) {
   const handleCommand = async (cmd: string) => {
     const lower = cmd.toLowerCase()
 
-    // 빠른 키워드 매칭 (즉시 응답)
-    if (lower.includes('현황') || lower.includes('보고')) {
+    // 빠른 키워드 매칭 (즉시 응답) — 업무 지시와 구분
+    // "현황 보고" vs "보고서 작성해줘" 구분: 짧은 현황 질문만 매칭
+    if ((lower.includes('현황') || lower === '보고') && !(/작성|만들|준비|분석|조사/.test(lower))) {
       addLog('employee', '[AIDE] 이수연: 현황 확인할게요. 잠시만요.')
       return
     }
@@ -401,7 +590,26 @@ export function CommandPanel({ isMobile }: Props) {
       return
     }
 
-    // 부서 감지 → 스킬 자동 표시
+    // 부서 생성 감지 (일반 모드에서도)
+    const deptToCreate = detectDeptCreation(cmd)
+    if (deptToCreate) {
+      await createDepartment(deptToCreate, cmd)
+      return
+    }
+
+    // 자율 업무 감지 → 부서 자동 분배 & 실행 (부서 스킬 표시보다 우선)
+    const taskCmd = detectTask(cmd)
+    if (taskCmd) {
+      setIsLoading(true)
+      try {
+        await executeAutonomousTask(taskCmd)
+      } finally {
+        setIsLoading(false)
+      }
+      return
+    }
+
+    // 부서 감지 → 스킬 자동 표시 (단순 부서 언급일 때만)
     const detectedDept = detectDept(cmd)
     if (detectedDept) {
       const skills = DEPT_SKILLS[detectedDept]
@@ -414,13 +622,6 @@ export function CommandPanel({ isMobile }: Props) {
         }
         return
       }
-    }
-
-    // 부서 생성 감지 (일반 모드에서도)
-    const deptToCreate = detectDeptCreation(cmd)
-    if (deptToCreate) {
-      await createDepartment(deptToCreate, cmd)
-      return
     }
 
     // 인식 못한 명령 → AI 비서(이수연)에게 전달

@@ -66,6 +66,31 @@ export interface EmployeeChatMsg {
   content: string
 }
 
+// ── 자율 업무 시스템
+export type TaskStatus = 'pending' | 'working' | 'done' | 'failed'
+
+export interface TaskStep {
+  empId: string
+  empName: string
+  dept: string
+  status: TaskStatus
+  message: string       // 진행 상황 메시지
+  result?: string       // 완료 결과
+  startedAt?: number
+  finishedAt?: number
+}
+
+export interface AutonomousTask {
+  id: string
+  command: string           // 원래 지시
+  targetDepts: string[]     // 관련 부서
+  steps: TaskStep[]         // 부서별 작업 단계
+  status: TaskStatus        // 전체 상태
+  summary?: string          // 최종 종합 보고
+  createdAt: number
+  finishedAt?: number
+}
+
 interface OfficeStore {
   // 직원 대화 (캔버스 클릭 → 페르소나 채팅)
   selectedEmployee: Employee | null
@@ -123,6 +148,12 @@ interface OfficeStore {
   pausedAtStep: number
   triggerLimit: (resetTime?: number | null) => void
   resumeLimit: () => void
+
+  // 자율 업무 시스템
+  tasks: AutonomousTask[]
+  addTask: (task: AutonomousTask) => void
+  updateTaskStep: (taskId: string, empId: string, update: Partial<TaskStep>) => void
+  finishTask: (taskId: string, summary: string) => void
 
   // Claude 한도 현황 (수동 입력, Supabase 동기화)
   claudeLimits: {
@@ -316,6 +347,32 @@ export const useOfficeStore = create<OfficeStore>()(
         return { chatLog: msgs, sessionLogs: nextLogs }
       })
     },
+
+    // ── 자율 업무 시스템
+    tasks: [],
+    addTask: (task) =>
+      set((s) => ({ tasks: [...s.tasks, task] })),
+    updateTaskStep: (taskId, empId, update) =>
+      set((s) => ({
+        tasks: s.tasks.map(t =>
+          t.id === taskId
+            ? {
+                ...t,
+                steps: t.steps.map(step =>
+                  step.empId === empId ? { ...step, ...update } : step
+                ),
+              }
+            : t
+        ),
+      })),
+    finishTask: (taskId, summary) =>
+      set((s) => ({
+        tasks: s.tasks.map(t =>
+          t.id === taskId
+            ? { ...t, status: 'done' as TaskStatus, summary, finishedAt: Date.now() }
+            : t
+        ),
+      })),
 
     // ── 시나리오
     // ── 동적 직원 (회의에서 생성)

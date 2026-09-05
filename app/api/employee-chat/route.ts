@@ -576,6 +576,74 @@ JSON 형식만 출력 (설명 없이):
     }
   }
 
+  // 자율 업무 수행 (개별 직원이 업무 처리)
+  if (body.action === 'autonomous-task') {
+    const { employeeName: name, dept, role, speech, message: taskDesc } = body
+    const context = body.previousSummary || ''
+
+    const taskPrompt = `[역할극 — 자율 업무 수행]
+당신은 AI 회사 "QuickBizLab"의 ${dept} 부서 ${role} "${name}"입니다.
+평소 말버릇: "${speech}"
+
+■ 대표님이 내린 업무 지시:
+"${taskDesc}"
+
+${context ? `■ 이전 단계 결과:\n${context}\n` : ''}
+
+당신은 ${dept} ${role}으로서 이 업무를 수행합니다.
+자신의 전문 분야 관점에서 구체적으로 작업 결과를 보고하세요.
+
+■ 출력 규칙:
+1. 첫 줄: [진행] 으로 시작하는 작업 시작 한마디 (1문장)
+2. 본문: 작업 결과 (3~5문장, 구체적 수치/내용 포함)
+3. 마지막 줄: [완료] 로 시작하는 완료 보고 한마디 (1문장)
+4. 존댓말, 이모지 1~2개
+5. "저는 AI입니다" 같은 말 절대 금지
+6. 순수 대사만 출력 (괄호 설명 없이)
+${role === '레드팀' ? '7. [레드팀] 이 업무의 리스크/문제점을 반드시 지적하고 개선안 제시' : ''}`
+
+    const { reply, model } = await aiChat(taskPrompt, 30, dept)
+    if (model === 'fallback') {
+      return NextResponse.json({
+        progress: `${name}: 업무 확인했습니다, 처리 중이에요! 💪`,
+        result: `${dept} ${role}으로서 "${taskDesc}" 업무를 완료했습니다.`,
+        model: 'fallback',
+      })
+    }
+
+    // [진행] 과 [완료] 파싱
+    const lines = reply.split('\n').filter(l => l.trim())
+    const progressLine = lines.find(l => l.includes('[진행]'))?.replace('[진행]', '').trim()
+      || lines[0]?.trim() || '작업 시작합니다!'
+    const resultLine = lines.filter(l => !l.includes('[진행]')).join('\n').trim()
+      || reply.trim()
+
+    return NextResponse.json({ progress: progressLine, result: resultLine, model })
+  }
+
+  // 업무 종합 보고 (모든 부서 결과 취합)
+  if (body.action === 'task-summary') {
+    const { message: taskDesc, previousSummary: allResults } = body
+
+    const summaryPrompt = `[역할극] 당신은 AI 회사 "QuickBizLab"의 수석비서 이수연입니다.
+
+대표님이 내린 업무: "${taskDesc}"
+
+각 부서의 작업 결과:
+${allResults}
+
+위 결과를 종합하여 대표님께 최종 보고하세요.
+
+■ 규칙:
+1. 2~4문장으로 핵심 결과 요약
+2. 각 부서 기여 내용 간단히 언급
+3. 존댓말, 이모지 사용
+4. "저는 AI입니다" 같은 말 절대 금지`
+
+    const { reply, model } = await aiChat(summaryPrompt, 20)
+    return NextResponse.json({ summary: reply || '모든 부서 업무 완료되었습니다.', model })
+  }
+
   // 대화 요약 요청
   if (body.action === 'summarize') {
     const { employeeName: name, history: hist } = body
