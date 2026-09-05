@@ -39,6 +39,11 @@ export function CommandPanel({ isMobile }: Props) {
   const chatSummaries = useOfficeStore((s) => s.employeeChatSummaries)
   const addChatMsg = useOfficeStore((s) => s.addEmployeeChatMsg)
   const setSummary = useOfficeStore((s) => s.setEmployeeChatSummary)
+  const activeSession = useOfficeStore((s) => s.activeSession)
+  const visitedSessions = useOfficeStore((s) => s.visitedSessions)
+  const setActiveSession = useOfficeStore((s) => s.setActiveSession)
+  const addSessionLog = useOfficeStore((s) => s.addSessionLog)
+  const walkEmpTo = useOfficeStore((s) => s.walkEmpTo)
   const { logUsage } = useUsageTracker()
   const [input, setInput] = useState('')
   const [isLoading, setIsLoading] = useState(false)
@@ -46,6 +51,7 @@ export function CommandPanel({ isMobile }: Props) {
   const [mounted, setMounted] = useState(false)
   const [meetingMode, setMeetingMode] = useState(false)
   const [meetingHistory, setMeetingHistory] = useState<string[]>([])  // 회의 맥락 유지
+  const [meetingLeaderSeats, setMeetingLeaderSeats] = useState<Record<string, {x:number,y:number}>>({})  // 팀장 원래 좌석
   const [viewingReport, setViewingReport] = useState<{
     id: string; title: string; content: string; employee_name: string; dept: string; created_at: string
   } | null>(null)
@@ -70,6 +76,15 @@ export function CommandPanel({ isMobile }: Props) {
 
   // 현재 선택된 직원의 히스토리
   const chatHistory = selectedEmployee ? (chatHistories[selectedEmployee.id] ?? []) : []
+
+  // 직원 선택 시 → 해당 부서 세션으로 전환
+  useEffect(() => {
+    if (selectedEmployee) {
+      setActiveSession(selectedEmployee.dept)
+    } else if (!meetingMode) {
+      setActiveSession('main')
+    }
+  }, [selectedEmployee?.id, meetingMode, setActiveSession]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // 직원 선택 시 — 이전 대화가 있고 요약이 없으면 자동 요약
   useEffect(() => {
@@ -165,11 +180,13 @@ export function CommandPanel({ isMobile }: Props) {
   const addDynamicEmployees = useOfficeStore((s) => s.addDynamicEmployees)
   const dynamicEmployees = useOfficeStore((s) => s.dynamicEmployees)
 
-  // 부서 생성 키워드 감지
+  // 부서 생성 키워드 감지 — 부서명만 정확히 추출
   const detectDeptCreation = (text: string): string | null => {
     const patterns = [
-      /(.+?)\s*(?:부서|팀)\s*(?:만들|신설|생성|창설|세팅|구성)/,
-      /(?:만들|신설|생성|창설|세팅|구성).*?(.+?)\s*(?:부서|팀)/,
+      // "마케팅 팀 만들어줘", "마케팅 부서 신설해줘"
+      /([가-힣a-zA-Z]{2,6})\s*(?:부서|팀)\s*(?:을|를)?\s*(?:만들|신설|생성|창설|세팅|구성)/,
+      // "만들어줘 마케팅 팀"
+      /(?:만들|신설|생성|창설|세팅|구성).*?([가-힣a-zA-Z]{2,6})\s*(?:부서|팀)/,
     ]
     for (const p of patterns) {
       const m = text.match(p)
@@ -241,6 +258,19 @@ export function CommandPanel({ isMobile }: Props) {
     }
   }, [addLog, addDynamicEmployees, dynamicEmployees])
 
+  // 회의 종료 — 팀장들 원래 자리로 복귀
+  const endMeeting = useCallback(() => {
+    setMeetingMode(false)
+    setMeetingHistory([])
+    setActiveSession('main')
+    // 팀장들을 원래 자리로 복귀
+    Object.entries(meetingLeaderSeats).forEach(([id, seat], i) => {
+      setTimeout(() => walkEmpTo(id, seat.x, seat.y), i * 150)
+    })
+    setMeetingLeaderSeats({})
+    addLog('sys', '🏛️ 회의가 종료되었습니다. 팀장들이 자리로 복귀합니다.')
+  }, [meetingLeaderSeats, walkEmpTo, setActiveSession, addLog])
+
   // 팀장 회의 진행
   const startMeeting = useCallback(async (agenda: string) => {
     if (isLoading) return
@@ -295,9 +325,9 @@ export function CommandPanel({ isMobile }: Props) {
     }
   }, [isLoading, addLog, meetingHistory, createDepartment])
 
-  const send = (preset?: string) => {
+  const send = async (preset?: string) => {
     const cmd = preset ?? input.trim()
-    if (!cmd) return
+    if (!cmd || isLoading) return
     setInput('')
 
     // 회의 모드: 안건 입력 → 회의 시작
@@ -315,7 +345,7 @@ export function CommandPanel({ isMobile }: Props) {
 
     addLog('boss', cmd)
     logUsage('command', cmd)
-    handleCommand(cmd)
+    await handleCommand(cmd)
   }
 
   // 부서 감지
@@ -327,30 +357,49 @@ export function CommandPanel({ isMobile }: Props) {
     return null
   }
 
-  const handleCommand = (cmd: string) => {
+  const handleCommand = async (cmd: string) => {
     const lower = cmd.toLowerCase()
-    let resp: string | null = null
 
+    // 빠른 키워드 매칭 (즉시 응답)
     if (lower.includes('현황') || lower.includes('보고')) {
-      resp = '[AIDE] 이수연: 현황 확인할게요. 잠시만요.'
-    } else if (lower.includes('늦')) {
-      resp = waitingApproval
-        ? '[AIDE] 이수연: 대표님 결재 대기예요. 승인 버튼 눌러주세요!'
-        : '[AIDE] 이수연: 지연 없어요. 정상 진행 중이에요.'
-    } else if (lower.includes('회의')) {
-      setMeetingMode(true)
-      resp = '[AIDE] 이수연: 팀장 전원 회의실 소집! 🏛️ 안건을 입력해주세요, 대표님.'
-    } else if (lower.includes('승인')) {
-      resp = waitingApproval
-        ? '[꽁꽁(대표)] 승인!'
-        : '[AIDE] 이수연: 현재 승인 대기 안건 없어요.'
-    } else if (lower.includes('집중')) {
-      resp = '[전원] 집중 모드 ON. 자리로 복귀합니다.'
-    } else {
-      resp = '[AIDE] 이수연: "현황 보고" "왜 늦어져?" "회의 소집" 또는 부서명/키워드를 입력해주세요.'
+      addLog('employee', '[AIDE] 이수연: 현황 확인할게요. 잠시만요.')
+      return
     }
-
-    if (resp) setTimeout(() => addLog('employee', resp!), 400)
+    if (lower.includes('늦')) {
+      addLog('employee', waitingApproval
+        ? '[AIDE] 이수연: 대표님 결재 대기예요. 승인 버튼 눌러주세요!'
+        : '[AIDE] 이수연: 지연 없어요. 정상 진행 중이에요.')
+      return
+    }
+    if (lower.includes('회의')) {
+      setMeetingMode(true)
+      setActiveSession('meeting')
+      // 팀장들 원래 좌석 저장 후 회의실로 이동
+      const allEmps = [...EMPLOYEES, ...useOfficeStore.getState().dynamicEmployees]
+      const leaders = allEmps.filter(e => e.role === '팀장')
+      const states = useOfficeStore.getState().empStates
+      const seats: Record<string, {x:number,y:number}> = {}
+      leaders.forEach((leader, i) => {
+        const st = states[leader.id]
+        seats[leader.id] = { x: st?.x ?? 0, y: st?.y ?? 0 }
+        const meetX = 17 + (i % 5)
+        const meetY = 17 + Math.floor(i / 5)
+        setTimeout(() => walkEmpTo(leader.id, meetX, meetY), i * 150)
+      })
+      setMeetingLeaderSeats(seats)
+      addLog('employee', '[AIDE] 이수연: 팀장 전원 회의실 소집! 🏛️ 안건을 입력해주세요, 대표님.')
+      return
+    }
+    if (lower.includes('승인')) {
+      addLog('employee', waitingApproval
+        ? '[꽁꽁(대표)] 승인!'
+        : '[AIDE] 이수연: 현재 승인 대기 안건 없어요.')
+      return
+    }
+    if (lower.includes('집중')) {
+      addLog('employee', '[전원] 집중 모드 ON. 자리로 복귀합니다.')
+      return
+    }
 
     // 부서 감지 → 스킬 자동 표시
     const detectedDept = detectDept(cmd)
@@ -358,14 +407,48 @@ export function CommandPanel({ isMobile }: Props) {
       const skills = DEPT_SKILLS[detectedDept]
       const leader = EMPLOYEES.find(e => e.dept === detectedDept && (e.role === '팀장' || e.role === '수석비서'))
       if (skills && skills.length > 0) {
-        setTimeout(() => {
-          const skillList = skills.map(s => `${s.icon} ${s.label}`).join(' · ')
-          addLog('sys', `🔧 [${detectedDept}] 활성 스킬: ${skillList}`)
-          if (leader) {
-            addLog('employee', `[${detectedDept}] ${leader.name}: 스킬 준비 완료! 작업 시작합니다.`)
-          }
-        }, 800)
+        const skillList = skills.map(s => `${s.icon} ${s.label}`).join(' · ')
+        addLog('sys', `🔧 [${detectedDept}] 활성 스킬: ${skillList}`)
+        if (leader) {
+          addLog('employee', `[${detectedDept}] ${leader.name}: 스킬 준비 완료! 작업 시작합니다.`)
+        }
+        return
       }
+    }
+
+    // 부서 생성 감지 (일반 모드에서도)
+    const deptToCreate = detectDeptCreation(cmd)
+    if (deptToCreate) {
+      await createDepartment(deptToCreate, cmd)
+      return
+    }
+
+    // 인식 못한 명령 → AI 비서(이수연)에게 전달
+    setIsLoading(true)
+    try {
+      const aide = EMPLOYEES.find(e => e.code === 'AIDE')!
+      const res = await fetch('/api/employee-chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          employeeId: aide.id,
+          employeeName: aide.name,
+          dept: aide.dept,
+          role: aide.role,
+          speech: aide.speech,
+          message: cmd,
+          history: [],
+        }),
+      })
+      const data = await res.json() as { reply: string; model?: string }
+      if (data.model === 'gemini') {
+        addLog('sys', '🟡 Claude 한도 소진 → Gemini Flash로 전환됨')
+      }
+      addLog('employee', `[AIDE] ${aide.name}: ${data.reply}`)
+    } catch {
+      addLog('employee', '[AIDE] 이수연: 죄송합니다, 잠시 후 다시 시도해주세요.')
+    } finally {
+      setIsLoading(false)
     }
   }
 
@@ -378,7 +461,7 @@ export function CommandPanel({ isMobile }: Props) {
             <>
               <span className="text-[#ffd43b]">🏛️ 팀장 회의 진행 중</span>
               <button
-                onClick={() => { setMeetingMode(false); setMeetingHistory([]) }}
+                onClick={endMeeting}
                 className="text-[10px] px-2 py-0.5 bg-[#1a2332] text-[#6b8cbb] rounded hover:bg-[#2a3342] hover:text-[#4af] transition-colors"
               >
                 ✕ 회의 종료
@@ -432,8 +515,42 @@ export function CommandPanel({ isMobile }: Props) {
         </div>
       )}
 
+      {/* 세션 탭 */}
+      {mounted && visitedSessions.length > 1 && (
+        <div className="flex gap-0.5 px-2 pt-1.5 pb-1 border-b border-[#1e3a5f] shrink-0 overflow-x-auto">
+          {visitedSessions.map((s) => {
+            const label = s === 'main' ? '📋 전체' : s === 'meeting' ? '🏛️ 회의' : `💬 ${s}`
+            const isActive = s === activeSession
+            return (
+              <button
+                key={s}
+                onClick={() => {
+                  setActiveSession(s)
+                  if (s === 'meeting') { setMeetingMode(true); setSelectedEmployee(null) }
+                  else if (s === 'main') { setMeetingMode(false); setSelectedEmployee(null) }
+                  // 부서 탭 클릭 시 해당 부서 팀장 선택
+                  else {
+                    setMeetingMode(false)
+                    const leader = [...EMPLOYEES, ...useOfficeStore.getState().dynamicEmployees]
+                      .find(e => e.dept === s && e.role === '팀장')
+                    if (leader) setSelectedEmployee(leader)
+                  }
+                }}
+                className={`px-2 py-0.5 text-[10px] font-semibold rounded whitespace-nowrap transition-colors ${
+                  isActive
+                    ? 'bg-[#4af] text-black'
+                    : 'bg-[#0a0e1a] border border-[#1e3a5f] text-[#6b8cbb] hover:border-[#4af] hover:text-[#4af]'
+                }`}
+              >
+                {label}
+              </button>
+            )
+          })}
+        </div>
+      )}
+
       {/* 퀵버튼 (일반 모드일 때만) */}
-      {!selectedEmployee && (
+      {!selectedEmployee && !meetingMode && (
         <div className="flex flex-wrap gap-1 p-2 border-b border-[#1e3a5f] shrink-0">
           {QUICK_CMDS.map((c) => (
             <button

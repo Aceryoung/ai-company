@@ -821,6 +821,36 @@ export function OfficeCanvas() {
     ctx.fillStyle = '#774433'
     ctx.fillRect(ceoX + TILE + 6, ceoY + 2 * TILE + 6, TILE - 12, TILE - 12)
 
+    // ── 직원 걷기 애니메이션 (x→tx, y→ty 보간)
+    const WALK_SPEED = 0.15
+    const stateUpdates: Record<string, Partial<EmployeeState>> = {}
+    for (const emp of allEmployees) {
+      const st = states[emp.id]
+      if (!st || !st.walking) continue
+      const dx = st.tx - st.x
+      const dy = st.ty - st.y
+      const dist = Math.sqrt(dx * dx + dy * dy)
+      if (dist < 0.2) {
+        // 도착
+        stateUpdates[emp.id] = { x: st.tx, y: st.ty, walking: false }
+      } else {
+        // 이동
+        stateUpdates[emp.id] = {
+          x: st.x + dx * WALK_SPEED,
+          y: st.y + dy * WALK_SPEED,
+        }
+      }
+    }
+    if (Object.keys(stateUpdates).length > 0) {
+      useOfficeStore.setState((s) => {
+        const next = { ...s.empStates }
+        for (const [id, upd] of Object.entries(stateUpdates)) {
+          next[id] = { ...next[id], ...upd }
+        }
+        return { empStates: next }
+      })
+    }
+
     // ── 직원 렌더 (y좌표 순서)
     const sorted = allEmployees.map((emp, i) => ({ emp, i, st: states[emp.id] }))
       .filter(e => e.st)

@@ -87,12 +87,19 @@ interface OfficeStore {
   walkEmpTo: (id: string, tx: number, ty: number, onArrived?: () => void) => void
   tickEmpBubbles: () => void
 
-  // 채팅
-  chatLog: ChatMessage[]
+  // 채팅 — 세션 기반
+  chatLog: ChatMessage[]                          // 호환용 (activeSession의 로그 뷰)
   _chatLogHydrated: boolean
   hydrateChatLog: () => void
   addLog: (type: ChatMessage['type'], text: string) => void
   setChatLog: (msgs: ChatMessage[]) => void
+
+  // 세션 시스템
+  activeSession: string                           // 'main' | 'meeting' | dept 이름
+  sessionLogs: Record<string, ChatMessage[]>      // 세션별 채팅 로그
+  visitedSessions: string[]                       // 방문한 세션 목록 (탭 표시용)
+  setActiveSession: (session: string) => void
+  addSessionLog: (session: string, type: ChatMessage['type'], text: string) => void
 
   // 동적 직원 (회의에서 생성된 부서·직원)
   dynamicEmployees: Employee[]
@@ -220,17 +227,42 @@ export const useOfficeStore = create<OfficeStore>()(
         return { empStates: next }
       }),
 
-    // ── 채팅 (localStorage 연동 — hydration 안전하게 빈 배열로 시작, useEffect로 복원)
+    // ── 채팅 — 세션 기반 (hydration 안전하게 빈 상태로 시작, useEffect로 복원)
     chatLog: [],
     _chatLogHydrated: false,
+    activeSession: 'main',
+    sessionLogs: {},
+    visitedSessions: ['main'],
+
     hydrateChatLog: () => {
       if (typeof window === 'undefined') return
       const s = get()
       if (s._chatLogHydrated) return
       const patch: Partial<OfficeStore> = { _chatLogHydrated: true }
+      // 세션 로그 복원
       try {
-        const cl = localStorage.getItem('office-chat-log')
-        if (cl) patch.chatLog = JSON.parse(cl) as ChatMessage[]
+        const sl = localStorage.getItem('session-logs')
+        if (sl) {
+          const parsed = JSON.parse(sl) as Record<string, ChatMessage[]>
+          patch.sessionLogs = parsed
+          // activeSession의 로그를 chatLog에 동기화
+          patch.chatLog = parsed[s.activeSession] ?? []
+        }
+      } catch { /* ignore */ }
+      // 기존 chatLog 마이그레이션 (sessionLogs가 없으면 chatLog → main 세션으로)
+      if (!patch.sessionLogs) {
+        try {
+          const cl = localStorage.getItem('office-chat-log')
+          if (cl) {
+            const msgs = JSON.parse(cl) as ChatMessage[]
+            patch.sessionLogs = { main: msgs }
+            patch.chatLog = msgs
+          }
+        } catch { /* ignore */ }
+      }
+      try {
+        const vs = localStorage.getItem('visited-sessions')
+        if (vs) patch.visitedSessions = JSON.parse(vs) as string[]
       } catch { /* ignore */ }
       try {
         const ch = localStorage.getItem('emp-chat-histories')
@@ -246,15 +278,43 @@ export const useOfficeStore = create<OfficeStore>()(
       } catch { /* ignore */ }
       set(patch)
     },
-    addLog: (type, text) =>
+
+    setActiveSession: (session) =>
       set((s) => {
-        const next = [...s.chatLog, { type, text, at: Date.now() }].slice(-60)
-        try { localStorage.setItem('office-chat-log', JSON.stringify(next)) } catch { /* ignore */ }
-        return { chatLog: next }
+        const visited = s.visitedSessions.includes(session)
+          ? s.visitedSessions
+          : [...s.visitedSessions, session]
+        try { localStorage.setItem('visited-sessions', JSON.stringify(visited)) } catch { /* ignore */ }
+        return {
+          activeSession: session,
+          chatLog: s.sessionLogs[session] ?? [],
+          visitedSessions: visited,
+        }
       }),
+
+    addSessionLog: (session, type, text) =>
+      set((s) => {
+        const sessionMsgs = [...(s.sessionLogs[session] ?? []), { type, text, at: Date.now() }].slice(-60)
+        const nextLogs = { ...s.sessionLogs, [session]: sessionMsgs }
+        try { localStorage.setItem('session-logs', JSON.stringify(nextLogs)) } catch { /* ignore */ }
+        // chatLog는 activeSession이면 동기화
+        const nextChatLog = session === s.activeSession ? sessionMsgs : s.chatLog
+        return { sessionLogs: nextLogs, chatLog: nextChatLog }
+      }),
+
+    // addLog은 activeSession에 기록 (하위 호환)
+    addLog: (type, text) => {
+      const session = get().activeSession
+      get().addSessionLog(session, type, text)
+    },
+
     setChatLog: (msgs) => {
-      try { localStorage.setItem('office-chat-log', JSON.stringify(msgs)) } catch { /* ignore */ }
-      set({ chatLog: msgs })
+      const session = get().activeSession
+      set((s) => {
+        const nextLogs = { ...s.sessionLogs, [session]: msgs }
+        try { localStorage.setItem('session-logs', JSON.stringify(nextLogs)) } catch { /* ignore */ }
+        return { chatLog: msgs, sessionLogs: nextLogs }
+      })
     },
 
     // ── 시나리오
