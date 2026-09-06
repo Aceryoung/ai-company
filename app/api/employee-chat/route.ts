@@ -64,10 +64,19 @@ async function fetchCalendarEvents(timeMin: string, timeMax: string): Promise<Ar
   } catch { return null }
 }
 
+// KST 기준 오늘 날짜 구하기 (Vercel은 UTC)
+function getKSTDate(offsetDays = 0): { timeMin: string; timeMax: string } {
+  const now = new Date()
+  const kst = new Date(now.getTime() + 9 * 60 * 60 * 1000 + offsetDays * 24 * 60 * 60 * 1000)
+  const y = kst.getUTCFullYear(), m = kst.getUTCMonth(), d = kst.getUTCDate()
+  // KST 00:00 → UTC로 변환 (KST - 9h)
+  const timeMin = new Date(Date.UTC(y, m, d, -9, 0, 0)).toISOString()
+  const timeMax = new Date(Date.UTC(y, m, d, 14, 59, 59)).toISOString() // KST 23:59:59 = UTC 14:59:59
+  return { timeMin, timeMax }
+}
+
 async function getTodaySchedule(): Promise<string> {
-  const today = new Date()
-  const timeMin = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 0, 0, 0).toISOString()
-  const timeMax = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 23, 59, 59).toISOString()
+  const { timeMin, timeMax } = getKSTDate(0)
 
   const events = await fetchCalendarEvents(timeMin, timeMax)
   if (events === null) return '[캘린더 미연결] Google Calendar가 연결되어 있지 않습니다.'
@@ -76,9 +85,7 @@ async function getTodaySchedule(): Promise<string> {
 }
 
 async function getTomorrowSchedule(): Promise<string> {
-  const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000)
-  const timeMin = new Date(tomorrow.getFullYear(), tomorrow.getMonth(), tomorrow.getDate(), 0, 0, 0).toISOString()
-  const timeMax = new Date(tomorrow.getFullYear(), tomorrow.getMonth(), tomorrow.getDate(), 23, 59, 59).toISOString()
+  const { timeMin, timeMax } = getKSTDate(1)
 
   const events = await fetchCalendarEvents(timeMin, timeMax)
   if (events === null) return '[캘린더 미연결]'
@@ -87,10 +94,8 @@ async function getTomorrowSchedule(): Promise<string> {
 }
 
 async function getWeekSchedule(): Promise<string> {
-  const today = new Date()
-  const timeMin = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 0, 0, 0).toISOString()
-  const endDate = new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000)
-  const timeMax = new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate(), 23, 59, 59).toISOString()
+  const { timeMin } = getKSTDate(0)
+  const { timeMax } = getKSTDate(7)
 
   const events = await fetchCalendarEvents(timeMin, timeMax)
   if (events === null) return '[캘린더 미연결]'

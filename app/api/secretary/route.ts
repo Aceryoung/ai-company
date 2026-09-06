@@ -129,14 +129,22 @@ async function getWeeklySummary(user = 'Aceryoung') {
   return summary
 }
 
+// KST 기준 날짜 (Vercel은 UTC)
+function getKSTDate(offsetDays = 0): { timeMin: string; timeMax: string } {
+  const now = new Date()
+  const kst = new Date(now.getTime() + 9 * 60 * 60 * 1000 + offsetDays * 24 * 60 * 60 * 1000)
+  const y = kst.getUTCFullYear(), m = kst.getUTCMonth(), d = kst.getUTCDate()
+  const timeMin = new Date(Date.UTC(y, m, d, -9, 0, 0)).toISOString()
+  const timeMax = new Date(Date.UTC(y, m, d, 14, 59, 59)).toISOString()
+  return { timeMin, timeMax }
+}
+
 // ── 오늘 일정
 async function getTodaySchedule() {
   const token = await getCalendarToken()
   if (!token) return { events: [], error: 'Google Calendar 연동 필요 — 설정에서 연결해주세요' }
 
-  const today = new Date()
-  const timeMin = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 0, 0, 0).toISOString()
-  const timeMax = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 23, 59, 59).toISOString()
+  const { timeMin, timeMax } = getKSTDate(0)
 
   try {
     const res = await fetch(
@@ -161,9 +169,7 @@ async function getTomorrowSchedule() {
   const token = await getCalendarToken()
   if (!token) return { events: [], error: 'Google Calendar 연동 필요' }
 
-  const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000)
-  const timeMin = new Date(tomorrow.getFullYear(), tomorrow.getMonth(), tomorrow.getDate(), 0, 0, 0).toISOString()
-  const timeMax = new Date(tomorrow.getFullYear(), tomorrow.getMonth(), tomorrow.getDate(), 23, 59, 59).toISOString()
+  const { timeMin, timeMax } = getKSTDate(1)
 
   try {
     const res = await fetch(

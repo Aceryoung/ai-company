@@ -169,10 +169,6 @@ export function CommandPanel({ isMobile }: Props) {
       }
       const reply = data.reply
 
-      if (data.model === 'gemini') {
-        addLog('sys', '🟡 Claude 한도 소진 → Gemini Flash로 전환됨')
-      }
-
       addLog('employee', `[${selectedEmployee.dept}] ${selectedEmployee.name}: ${reply}`)
       addChatMsg(selectedEmployee.id, { role: 'assistant', content: reply })
 
@@ -765,10 +761,6 @@ export function CommandPanel({ isMobile }: Props) {
       })
       const data = await res.json() as { replies: string[]; model?: string }
 
-      if (data.model === 'gemini') {
-        addLog('sys', '🟡 Claude 한도 소진 → Gemini Flash로 전환됨')
-      }
-
       // 팀장 발언을 순차적으로 표시
       const replyLines: string[] = []
       for (let i = 0; i < data.replies.length; i++) {
@@ -932,9 +924,6 @@ export function CommandPanel({ isMobile }: Props) {
         }),
       })
       const data = await res.json() as { reply: string; model?: string }
-      if (data.model === 'gemini') {
-        addLog('sys', '🟡 Claude 한도 소진 → Gemini Flash로 전환됨')
-      }
       addLog('employee', `[AIDE] ${aide.name}: ${data.reply}`)
     } catch {
       addLog('employee', '[AIDE] 이수연: 죄송합니다, 잠시 후 다시 시도해주세요.')
