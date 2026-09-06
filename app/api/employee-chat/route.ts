@@ -274,19 +274,19 @@ const ROLE_PERSONA: Record<string, string> = {
 // ── AI 모델 호출
 
 // Gemini Flash (무료)
-async function geminiChat(prompt: string): Promise<string> {
+async function geminiChat(prompt: string, maxTokens = 2000): Promise<string> {
   const apiKey = process.env.GEMINI_API_KEY
   if (!apiKey) return 'GEMINI_ERROR: API 키 없음'
 
   try {
     const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${apiKey}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: { temperature: 0.8, maxOutputTokens: 1500 },
+          generationConfig: { temperature: 0.8, maxOutputTokens: maxTokens },
         }),
         signal: AbortSignal.timeout(45_000),
       }
@@ -349,17 +349,22 @@ function isLimitError(text: string): boolean {
 }
 
 // 통합 AI 호출: Gemini → Anthropic → fallback
-async function aiChat(prompt: string, _timeoutSec = 30, _dept?: string, forceModel?: string): Promise<{ reply: string; model: 'claude' | 'gemini' | 'fallback' }> {
+async function aiChat(prompt: string, _timeoutSec = 30, _dept?: string, forceModel?: string, maxTokens = 2000): Promise<{ reply: string; model: 'claude' | 'gemini' | 'fallback' }> {
   if (forceModel === 'claude') {
     const result = await anthropicChat(prompt, 45_000)
     if (!result.startsWith('CLAUDE_ERROR:') && !isLimitError(result)) {
       return { reply: result, model: 'claude' }
     }
+    // Claude 실패 → Gemini 폴백
+    const gemFallback = await geminiChat(prompt, maxTokens)
+    if (!gemFallback.startsWith('GEMINI_ERROR:')) {
+      return { reply: gemFallback, model: 'gemini' }
+    }
     return { reply: '', model: 'fallback' }
   }
 
   // 1차: Gemini
-  const geminiResult = await geminiChat(prompt)
+  const geminiResult = await geminiChat(prompt, maxTokens)
   if (!geminiResult.startsWith('GEMINI_ERROR:')) {
     return { reply: geminiResult, model: 'gemini' }
   }
@@ -409,7 +414,7 @@ ${conversationContext ? `이전 대화 맥락:\n${conversationContext}\n` : ''}
 규칙:
 - 한국어, ${dept} 전문 관점, 구체적 수치 포함, 500~800자`
 
-  const { reply: reportContent, model } = await aiChat(reportPrompt, 45)
+  const { reply: reportContent, model } = await aiChat(reportPrompt, 45, undefined, undefined, 4000)
   if (model === 'fallback' || !reportContent) return null
 
   const titleMatch = reportContent.match(/^#\s+(.+)/m)
@@ -499,7 +504,7 @@ ${prevContext}
 5. "저는 AI입니다" 같은 말 절대 금지.
 6. **즉시 보고**: 미래 약속 금지. 지금 바로 구체적 의견과 결과를 말하세요.`
 
-    const { reply, model } = await aiChat(meetingPrompt, 45)
+    const { reply, model } = await aiChat(meetingPrompt, 45, undefined, undefined, 4000)
     if (model === 'fallback') {
       return NextResponse.json({
         replies: ['[비서] 이수연: 죄송합니다, 현재 회의 시스템에 일시적 오류가 있어요. 잠시 후 다시 시도해주세요! 📋'],
