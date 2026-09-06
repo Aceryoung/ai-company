@@ -12,10 +12,10 @@ export default function LoginPage() {
   const [pin, setPin] = useState("");
   const [loading, setLoading] = useState(false);
   const [shake, setShake] = useState(false);
-  const [error, setError] = useState(false);
+  const [error, setError] = useState("");
 
   const handleChange = async (next: string) => {
-    setError(false);
+    setError("");
     setPin(next);
 
     if (next.length !== PIN_LENGTH) return;
@@ -25,7 +25,7 @@ export default function LoginPage() {
     setLoading(false);
 
     if (result.error) {
-      setError(true);
+      setError(result.error);
       setShake(true);
       setPin("");
       setTimeout(() => setShake(false), 300);
@@ -50,7 +50,7 @@ export default function LoginPage() {
         />
 
         {error && (
-          <p className="text-sm text-red-500">PIN이 올바르지 않습니다</p>
+          <p className="text-sm text-red-500">{error}</p>
         )}
 
         {loading && (
