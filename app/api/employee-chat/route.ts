@@ -149,7 +149,7 @@ async function getBusinessLedger(): Promise<string> {
 
 // ── GitHub 주간 현황
 async function getGitHubSummary(): Promise<string> {
-  const repos = ['Aceryoung/familyproject', 'Aceryoung/sentence-collector']
+  const repos = ['Aceryoung/familyproject', 'Aceryoung/sentence-collector', 'Aceryoung/ai-company']
   const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
   const lines: string[] = []
 

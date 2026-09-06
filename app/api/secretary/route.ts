@@ -38,7 +38,7 @@ async function getCalendarToken(): Promise<string | null> {
 
 // ── GitHub 주간 정리 (fetch 기반)
 async function getWeeklySummary(user = 'Aceryoung') {
-  const repos = ['Aceryoung/familyproject', 'Aceryoung/sentence-collector']
+  const repos = ['Aceryoung/familyproject', 'Aceryoung/sentence-collector', 'Aceryoung/ai-company']
   const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
 
   const ghToken = process.env.GITHUB_TOKEN || ''
