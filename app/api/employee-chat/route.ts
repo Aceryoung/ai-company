@@ -387,15 +387,16 @@ async function aiChat(prompt: string, _timeoutSec = 30, _dept?: string, forceMod
   if (!geminiResult.startsWith('GEMINI_ERROR:')) {
     return { reply: geminiResult, model: 'gemini' }
   }
-  console.log('[employee-chat] Gemini 실패:', geminiResult.slice(0, 80))
+  console.log('[employee-chat] Gemini 실패:', geminiResult.slice(0, 200))
 
   // 2차: Anthropic API
   const claudeResult = await anthropicChat(prompt)
   if (!claudeResult.startsWith('CLAUDE_ERROR:') && !isLimitError(claudeResult)) {
     return { reply: claudeResult, model: 'claude' }
   }
+  console.log('[employee-chat] Claude 실패:', claudeResult.slice(0, 200))
 
-  return { reply: '', model: 'fallback' }
+  return { reply: `[DEBUG] G:${geminiResult.slice(0, 80)} | C:${claudeResult.slice(0, 80)}`, model: 'fallback' }
 }
 
 // ── 보고서 감지 & 생성
@@ -795,12 +796,14 @@ ${historyText}
 대표님: ${message}
 ${employeeName}:`
 
-  const { reply, model } = await aiChat(prompt, 30, dept, body.forceModel)
+  const aiResult = await aiChat(prompt, 30, dept, body.forceModel)
+  const { reply, model } = aiResult
 
   if (model === 'fallback') {
     return NextResponse.json({
       reply: getRuleBasedReply(employeeName, dept, role, speech, message),
       model: 'fallback',
+      _debug: reply || undefined,  // 임시: fallback 원인 (reply에 에러 정보 담김)
     })
   }
 
