@@ -292,14 +292,36 @@ const ROLE_PERSONA: Record<string, string> = {
 
 // ── AI 모델 호출
 
-// Gemini Flash (무료)
-async function geminiChat(prompt: string, maxTokens = 2000): Promise<string> {
+// Gemini 모델 자동 교체 시스템 — 한도 초과 시 다음 모델로 자동 전환
+const GEMINI_MODELS = [
+  'gemini-3.5-flash',       // 1순위: 최신 안정
+  'gemini-3.5-flash-lite',  // 2순위: 경량 (한도 별도)
+  'gemini-3.1-flash-lite',  // 3순위: 이전 세대 경량
+  'gemini-3.6-flash',       // 4순위: 최신 (한도 20/일로 적음)
+]
+
+// 모델별 한도 차단 상태 (메모리 캐시, 서버리스 인스턴스 수명 동안 유지)
+const modelBlocked: Record<string, number> = {}  // model → unblock timestamp
+const MODEL_BLOCK_DURATION = 60_000  // 1분간 차단 후 재시도
+
+function getAvailableModels(): string[] {
+  const now = Date.now()
+  return GEMINI_MODELS.filter(m => !modelBlocked[m] || now > modelBlocked[m])
+}
+
+function blockModel(model: string) {
+  modelBlocked[model] = Date.now() + MODEL_BLOCK_DURATION
+  console.log(`[gemini] ${model} blocked for ${MODEL_BLOCK_DURATION / 1000}s, remaining: ${getAvailableModels().join(', ') || 'none'}`)
+}
+
+// 단일 Gemini 모델 호출
+async function geminiChatSingle(model: string, prompt: string, maxTokens: number): Promise<string> {
   const apiKey = process.env.GEMINI_API_KEY
   if (!apiKey) return 'GEMINI_ERROR: API 키 없음'
 
   try {
     const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${apiKey}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -312,9 +334,16 @@ async function geminiChat(prompt: string, maxTokens = 2000): Promise<string> {
     )
     const data = await res.json() as {
       candidates?: Array<{ content?: { parts?: Array<{ text?: string; thoughtSignature?: string }> } }>
-      error?: { message?: string }
+      error?: { message?: string; code?: number }
     }
-    if (data.error) return `GEMINI_ERROR: ${data.error.message?.slice(0, 100)}`
+    if (data.error) {
+      const errMsg = data.error.message || ''
+      // 한도/할당량 에러 → 이 모델 차단
+      if (data.error.code === 429 || /quota|rate.limit|exceeded|RESOURCE_EXHAUSTED/i.test(errMsg)) {
+        blockModel(model)
+      }
+      return `GEMINI_ERROR: ${errMsg.slice(0, 100)}`
+    }
     const parts = data.candidates?.[0]?.content?.parts ?? []
     const text = parts.filter(p => p.text).map(p => p.text!).join('').trim()
     return text || 'GEMINI_ERROR: 빈 응답'
@@ -322,6 +351,30 @@ async function geminiChat(prompt: string, maxTokens = 2000): Promise<string> {
     const err = e as { message?: string }
     return `GEMINI_ERROR: ${err.message?.slice(0, 100) || 'unknown'}`
   }
+}
+
+// Gemini 자동 교체 호출 — 사용 가능한 모델을 순서대로 시도
+async function geminiChat(prompt: string, maxTokens = 2000): Promise<string> {
+  const models = getAvailableModels()
+  if (models.length === 0) {
+    // 전부 차단됨 → 가장 먼저 풀릴 모델로 시도
+    console.log('[gemini] All models blocked, trying primary anyway')
+    return geminiChatSingle(GEMINI_MODELS[0], prompt, maxTokens)
+  }
+
+  for (const model of models) {
+    const result = await geminiChatSingle(model, prompt, maxTokens)
+    if (!result.startsWith('GEMINI_ERROR:')) {
+      return result  // 성공
+    }
+    // 한도 에러가 아닌 다른 에러면 다음 모델 시도하지 않음 (프롬프트 문제 등)
+    if (!/quota|rate.limit|exceeded|RESOURCE_EXHAUSTED|429/i.test(result)) {
+      return result
+    }
+    // 한도 에러 → 다음 모델로 자동 전환
+    console.log(`[gemini] ${model} hit limit, trying next...`)
+  }
+  return 'GEMINI_ERROR: 모든 모델 한도 초과'
 }
 
 // Anthropic Messages API (Claude 폴백)
