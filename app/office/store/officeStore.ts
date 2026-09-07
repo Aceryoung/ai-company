@@ -290,12 +290,16 @@ export const useOfficeStore = create<OfficeStore>()(
       })),
 
     walkEmpTo: (id, tx, ty, onArrived) =>
-      set((s) => ({
-        empStates: {
-          ...s.empStates,
-          [id]: { ...s.empStates[id], tx, ty, walking: true, onArrived },
-        },
-      })),
+      set((s) => {
+        const prev = s.empStates[id]
+        const base = prev ?? { status: 'idle' as EmployeeStatus, bubble: '', bubbleTimer: 0, x: tx, y: ty }
+        return {
+          empStates: {
+            ...s.empStates,
+            [id]: { ...base, tx, ty, walking: true, onArrived },
+          },
+        }
+      }),
 
     tickEmpBubbles: () =>
       set((s) => {

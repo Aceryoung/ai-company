@@ -993,24 +993,46 @@ export function CommandPanel({ isMobile }: Props) {
           {meetingMode ? (
             <>
               <span className="text-[#ffd43b]">🏛️ 팀장 회의 진행 중</span>
-              <button
-                onClick={endMeeting}
-                className="text-[10px] px-2 py-0.5 bg-[#1a2332] text-[#6b8cbb] rounded hover:bg-[#2a3342] hover:text-[#4af] transition-colors"
-              >
-                ✕ 회의 종료
-              </button>
+              <div className="flex gap-1">
+                {chatLog.length > 0 && (
+                  <button
+                    onClick={summarizeAndClear}
+                    disabled={isSummarizing}
+                    className="text-[10px] px-2 py-0.5 bg-[#1a2332] text-[#6b8cbb] rounded hover:bg-[#2a3342] hover:text-[#ffa94d] transition-colors disabled:opacity-50"
+                  >
+                    {isSummarizing ? '⏳' : '🗑️ 정리'}
+                  </button>
+                )}
+                <button
+                  onClick={endMeeting}
+                  className="text-[10px] px-2 py-0.5 bg-[#1a2332] text-[#6b8cbb] rounded hover:bg-[#2a3342] hover:text-[#4af] transition-colors"
+                >
+                  ✕ 회의 종료
+                </button>
+              </div>
             </>
           ) : selectedEmployee ? (
             <>
               <span style={{ color: selectedEmployee.deptColor }}>
                 🗣️ {selectedEmployee.name}과 대화 중
               </span>
-              <button
-                onClick={() => setSelectedEmployee(null)}
-                className="text-[10px] px-2 py-0.5 bg-[#1a2332] text-[#6b8cbb] rounded hover:bg-[#2a3342] hover:text-[#4af] transition-colors"
-              >
-                ✕ 나가기
-              </button>
+              <div className="flex gap-1">
+                {chatLog.length > 0 && (
+                  <button
+                    onClick={summarizeAndClear}
+                    disabled={isSummarizing}
+                    className="text-[10px] px-2 py-0.5 bg-[#1a2332] text-[#6b8cbb] rounded hover:bg-[#2a3342] hover:text-[#ffa94d] transition-colors disabled:opacity-50"
+                  >
+                    {isSummarizing ? '⏳' : '🗑️ 정리'}
+                  </button>
+                )}
+                <button
+                  onClick={() => setSelectedEmployee(null)}
+                  className="text-[10px] px-2 py-0.5 bg-[#1a2332] text-[#6b8cbb] rounded hover:bg-[#2a3342] hover:text-[#4af] transition-colors"
+                >
+                  ✕ 나가기
+                </button>
+              </div>
             </>
           ) : (
             <>

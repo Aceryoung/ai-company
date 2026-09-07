@@ -701,17 +701,29 @@ export function OfficeCanvas() {
       const emp = allEmployees[i]
       const seat = getSeat(i)
       const st = useOfficeStore.getState().empStates[emp.id]
-      if (!st || (st.x === 0 && st.y === 0)) {
+      // walking 중인 직원은 덮어쓰지 않음 (회의실 이동 중일 수 있음)
+      if (!st) {
         useOfficeStore.setState((s) => ({
           empStates: {
             ...s.empStates,
             [emp.id]: {
-              status: st?.status ?? 'idle',
-              bubble: st?.bubble ?? '',
-              bubbleTimer: st?.bubbleTimer ?? 0,
+              status: 'idle',
+              bubble: '',
+              bubbleTimer: 0,
               x: seat.x, y: seat.y,
               tx: seat.x, ty: seat.y,
               walking: false,
+            },
+          },
+        }))
+      } else if (st.x === 0 && st.y === 0 && !st.walking) {
+        useOfficeStore.setState((s) => ({
+          empStates: {
+            ...s.empStates,
+            [emp.id]: {
+              ...s.empStates[emp.id],
+              x: seat.x, y: seat.y,
+              tx: seat.x, ty: seat.y,
             },
           },
         }))
