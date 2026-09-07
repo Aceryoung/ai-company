@@ -29,10 +29,11 @@ const DEPT_KEYWORDS: Record<string, string[]> = {
 
 interface Props {
   isMobile?: boolean
+  onSwitchToOffice?: () => void
 }
 
 
-export function CommandPanel({ isMobile }: Props) {
+export function CommandPanel({ isMobile, onSwitchToOffice }: Props) {
   const { chatLog, addLog, waitingApproval, hydrateChatLog } = useOfficeStore()
   const selectedEmployee = useOfficeStore((s) => s.selectedEmployee)
   const setSelectedEmployee = useOfficeStore((s) => s.setSelectedEmployee)
@@ -740,7 +741,11 @@ export function CommandPanel({ isMobile }: Props) {
     })
     setMeetingLeaderSeats({})
     addLog('sys', '🏛️ 회의가 종료되었습니다. 팀장들이 자리로 복귀합니다.')
-  }, [meetingLeaderSeats, walkEmpTo, setActiveSession, addLog, setMeetingMode, setMeetingHistory, setMeetingLeaderSeats])
+    // 모바일: 사무실 탭으로 전환해서 복귀 애니메이션 보여주기
+    if (isMobile && onSwitchToOffice) {
+      onSwitchToOffice()
+    }
+  }, [meetingLeaderSeats, walkEmpTo, setActiveSession, addLog, setMeetingMode, setMeetingHistory, setMeetingLeaderSeats, isMobile, onSwitchToOffice])
 
   // 대화 요약 후 정리
   const summarizeAndClear = useCallback(async () => {
@@ -905,6 +910,10 @@ export function CommandPanel({ isMobile }: Props) {
       })
       setMeetingLeaderSeats(seats)
       addLog('employee', '[AIDE] 이수연: 전원 회의실 소집! 🏛️ 안건을 입력해주세요, 대표님.')
+      // 모바일: 사무실 탭으로 잠깐 전환해서 이동 애니메이션 보여주기
+      if (isMobile && onSwitchToOffice) {
+        onSwitchToOffice()
+      }
       return
     }
     if (lower.includes('승인')) {

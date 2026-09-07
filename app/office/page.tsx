@@ -167,7 +167,7 @@ export default function OfficePage() {
           {/* 지시창 탭 (전체화면) */}
           {activeTab === 'command' && (
             <div className="h-full flex flex-col">
-              <CommandPanel isMobile />
+              <CommandPanel isMobile onSwitchToOffice={() => setActiveTab('office')} />
             </div>
           )}
 
