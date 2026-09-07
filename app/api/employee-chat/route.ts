@@ -396,7 +396,7 @@ async function aiChat(prompt: string, _timeoutSec = 30, _dept?: string, forceMod
   }
   console.log('[employee-chat] Claude 실패:', claudeResult.slice(0, 200))
 
-  return { reply: `[DEBUG] G:${geminiResult.slice(0, 80)} | C:${claudeResult.slice(0, 80)}`, model: 'fallback' }
+  return { reply: '', model: 'fallback' }
 }
 
 // ── 보고서 감지 & 생성
@@ -796,14 +796,12 @@ ${historyText}
 대표님: ${message}
 ${employeeName}:`
 
-  const aiResult = await aiChat(prompt, 30, dept, body.forceModel)
-  const { reply, model } = aiResult
+  const { reply, model } = await aiChat(prompt, 30, dept, body.forceModel)
 
   if (model === 'fallback') {
     return NextResponse.json({
       reply: getRuleBasedReply(employeeName, dept, role, speech, message),
       model: 'fallback',
-      _debug: reply || undefined,  // 임시: fallback 원인 (reply에 에러 정보 담김)
     })
   }
 
@@ -828,5 +826,76 @@ function getRuleBasedReply(name: string, dept: string, role: string, speech: str
     return `감사합니다 대표님! 더 열심히 하겠습니다! ✨`
   if (lower.includes('일정') || lower.includes('언제') || lower.includes('마감'))
     return `현재 ${dept} 주요 업무는 정상 진행 중이고, 이번 주 내 마감 건은 없습니다! 📅`
-  return `네 대표님, ${dept} ${role} 기준으로 현재 특이사항 없이 정상 가동 중입니다! 💼`
+
+  // 부서별 맞춤 fallback (키워드 기반)
+  const deptFallbacks: Record<string, Array<[RegExp, string]>> = {
+    시장조사: [
+      [/트렌드|동향/, `최근 시장 트렌드 모니터링 중입니다. 주요 변화 감지 시 바로 보고드릴게요! 📊`],
+      [/경쟁|경쟁사/, `경쟁사 동향 파악 중이에요. ${speech} 🔍`],
+    ],
+    영업: [
+      [/고객|클라이언트/, `고객 파이프라인 관리 중입니다. ${speech} 🤝`],
+      [/매출|실적/, `이번 달 영업 실적 집계 중이에요! 📈`],
+    ],
+    기획: [
+      [/PRD|기획|문서/, `관련 기획 문서 정리 중입니다. 완료되면 바로 공유드릴게요! ${speech} 📝`],
+      [/연동|노션|피그마/, `해당 연동 상태를 확인해보겠습니다. 잠시만요! 🔗`],
+      [/기능|요구|스펙/, `기능 요구사항 정리 중입니다. ${speech} 📋`],
+    ],
+    개발: [
+      [/코드|개발|구현/, `코드 작업 진행 중입니다! ${speech} ⚙️`],
+      [/버그|에러|오류/, `확인해보겠습니다. 디버깅 들어갈게요! 🐛`],
+    ],
+    배포: [
+      [/배포|디플로이|deploy/, `배포 파이프라인 확인 중입니다! 🚀`],
+      [/빌드|CI/, `CI/CD 상태 점검 중이에요. ${speech} 🔧`],
+    ],
+    검수: [
+      [/리뷰|검토|테스트/, `코드 리뷰 및 검수 진행 중입니다! ${speech} 🛡️`],
+      [/보안|취약/, `보안 점검 항목 확인 중이에요! 🔒`],
+    ],
+    레포: [
+      [/레포|저장소|깃|git/, `GitHub 레포 상태 확인 중입니다! 🔗`],
+      [/PR|커밋|머지/, `PR/커밋 현황 집계 중이에요. ${speech} 📂`],
+    ],
+    고객소통: [
+      [/고객|피드백|문의/, `고객 피드백 수집 및 정리 중입니다! ${speech} 💬`],
+    ],
+    정산: [
+      [/정산|매출|비용|돈/, `정산 데이터 확인 중입니다! ${speech} 💰`],
+    ],
+    비서: [
+      [/일정|스케줄|캘린더/, `일정 확인 중이에요! ${speech} 📅`],
+      [/메일|이메일/, `메일함 확인 중입니다! ✉️`],
+    ],
+    운영: [
+      [/서버|모니터|장애/, `서버 상태 모니터링 중입니다! ${speech} 🖥️`],
+    ],
+    회고: [
+      [/회고|리뷰|개선/, `회고 분석 진행 중이에요! ${speech} 📖`],
+    ],
+    채용: [
+      [/조직|인력|채용/, `조직 구조 분석 중입니다! ${speech} 👥`],
+    ],
+    마케팅: [
+      [/마케팅|캠페인|콘텐츠/, `마케팅 전략 검토 중이에요! ${speech} 📡`],
+    ],
+    경영: [
+      [/전략|KPI|의사결정/, `전략 보고 준비 중입니다! ${speech} 📊`],
+    ],
+  }
+
+  const deptRules = deptFallbacks[dept]
+  if (deptRules) {
+    for (const [pattern, reply] of deptRules) {
+      if (pattern.test(lower)) return reply
+    }
+  }
+
+  // 질문 패턴 감지 — "~인데?", "~있어?", "~해줘" 등
+  if (/\?|인데|있어|없어|해줘|해주세요|알려|설명/.test(message)) {
+    return `네 대표님, 확인해보겠습니다! 잠시만요. ${speech} 🔍`
+  }
+
+  return `네 대표님, 말씀 확인했습니다! ${dept} ${role}으로서 바로 처리하겠습니다. ${speech} 💼`
 }
