@@ -152,6 +152,14 @@ interface OfficeStore {
   setActiveSession: (session: string) => void
   addSessionLog: (session: string, type: ChatMessage['type'], text: string) => void
 
+  // 회의 상태 (탭 전환해도 유지)
+  meetingMode: boolean
+  meetingHistory: string[]
+  meetingLeaderSeats: Record<string, {x: number, y: number}>
+  setMeetingMode: (v: boolean) => void
+  setMeetingHistory: (h: string[]) => void
+  setMeetingLeaderSeats: (seats: Record<string, {x: number, y: number}>) => void
+
   // 동적 직원 (회의에서 생성된 부서·직원)
   dynamicEmployees: Employee[]
   addDynamicEmployees: (employees: Employee[]) => void
@@ -434,6 +442,14 @@ export const useOfficeStore = create<OfficeStore>()(
             : t
         ),
       })),
+
+    // ── 회의 상태
+    meetingMode: false,
+    meetingHistory: [],
+    meetingLeaderSeats: {},
+    setMeetingMode: (v) => set({ meetingMode: v }),
+    setMeetingHistory: (h) => set({ meetingHistory: h }),
+    setMeetingLeaderSeats: (seats) => set({ meetingLeaderSeats: seats }),
 
     // ── 시나리오
     // ── 동적 직원 (회의에서 생성) — 초기화 시 즉시 localStorage 복원

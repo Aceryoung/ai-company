@@ -55,14 +55,18 @@ export function CommandPanel({ isMobile }: Props) {
   const addTaskMemory = useOfficeStore((s) => s.addTaskMemory)
   const getRelevantMemories = useOfficeStore((s) => s.getRelevantMemories)
   const taskMemories = useOfficeStore((s) => s.taskMemories)
+  // 회의 상태 (zustand — 탭 전환해도 유지)
+  const meetingMode = useOfficeStore((s) => s.meetingMode)
+  const setMeetingMode = useOfficeStore((s) => s.setMeetingMode)
+  const meetingHistory = useOfficeStore((s) => s.meetingHistory)
+  const setMeetingHistory = useOfficeStore((s) => s.setMeetingHistory)
+  const meetingLeaderSeats = useOfficeStore((s) => s.meetingLeaderSeats)
+  const setMeetingLeaderSeats = useOfficeStore((s) => s.setMeetingLeaderSeats)
   const { logUsage } = useUsageTracker()
   const [input, setInput] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [summarized, setSummarized] = useState<Set<string>>(new Set())
   const [mounted, setMounted] = useState(false)
-  const [meetingMode, setMeetingMode] = useState(false)
-  const [meetingHistory, setMeetingHistory] = useState<string[]>([])  // 회의 맥락 유지
-  const [meetingLeaderSeats, setMeetingLeaderSeats] = useState<Record<string, {x:number,y:number}>>({})  // 팀장 원래 좌석
   const [viewingReport, setViewingReport] = useState<{
     id: string; title: string; content: string; employee_name: string; dept: string; created_at: string
   } | null>(null)
@@ -732,7 +736,7 @@ export function CommandPanel({ isMobile }: Props) {
     })
     setMeetingLeaderSeats({})
     addLog('sys', '🏛️ 회의가 종료되었습니다. 팀장들이 자리로 복귀합니다.')
-  }, [meetingLeaderSeats, walkEmpTo, setActiveSession, addLog])
+  }, [meetingLeaderSeats, walkEmpTo, setActiveSession, addLog, setMeetingMode, setMeetingHistory, setMeetingLeaderSeats])
 
   // 팀장 회의 진행
   const startMeeting = useCallback(async (agenda: string) => {
