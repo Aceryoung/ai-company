@@ -513,6 +513,7 @@ ${conversationContext ? `이전 대화 맥락:\n${conversationContext}\n` : ''}
     })
     const data = await res.json() as Array<{ id: string }>
     if (!res.ok || !data[0]?.id) return null
+
     return { id: data[0].id, title }
   } catch { return null }
 }
