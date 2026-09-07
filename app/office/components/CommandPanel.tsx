@@ -155,7 +155,16 @@ export function CommandPanel({ isMobile, onSwitchToOffice }: Props) {
 
     try {
       const currentHistory = chatHistories[selectedEmployee.id] ?? []
-      const previousSummary = chatSummaries[selectedEmployee.id] || undefined
+      // 직원별 이전 대화 요약 + 회의 맥락 결합
+      let previousSummary = chatSummaries[selectedEmployee.id] || ''
+      const recentMeeting = meetingHistory.length > 0
+        ? meetingHistory.slice(-6).join('\n')
+        : ''
+      if (recentMeeting) {
+        previousSummary = previousSummary
+          ? `${previousSummary}\n\n■ 최근 회의 맥락:\n${recentMeeting}`
+          : `■ 최근 회의 맥락:\n${recentMeeting}`
+      }
       const res = await fetch('/api/employee-chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -167,7 +176,7 @@ export function CommandPanel({ isMobile, onSwitchToOffice }: Props) {
           speech: selectedEmployee.speech,
           message,
           history: currentHistory,
-          previousSummary,
+          previousSummary: previousSummary || undefined,
           ...(selectedEmployee.forceModel ? { forceModel: selectedEmployee.forceModel } : {}),
         }),
       })
@@ -191,7 +200,7 @@ export function CommandPanel({ isMobile, onSwitchToOffice }: Props) {
     } finally {
       setIsLoading(false)
     }
-  }, [selectedEmployee, isLoading, chatHistories, chatSummaries, addLog, addChatMsg])
+  }, [selectedEmployee, isLoading, chatHistories, chatSummaries, meetingHistory, addLog, addChatMsg])
 
   const addDynamicEmployees = useOfficeStore((s) => s.addDynamicEmployees)
   const dynamicEmployees = useOfficeStore((s) => s.dynamicEmployees)

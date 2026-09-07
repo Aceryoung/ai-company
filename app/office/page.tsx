@@ -10,6 +10,7 @@ import { EmployeeList } from './components/EmployeeList'
 import { Scenario } from './components/Scenario'
 import { Pipeline } from './components/Pipeline'
 import { CommandPanel } from './components/CommandPanel'
+import { Documents } from './components/Documents'
 import { Secretary } from './components/Secretary'
 import { LimitOverlay } from './components/LimitOverlay'
 import { LimitTimerBar } from './components/LimitTimerBar'
@@ -20,7 +21,7 @@ import { useSupabaseData } from './hooks/useSupabaseData'
 import { useBackgroundWorker } from './hooks/useBackgroundWorker'
 import { cn } from '@/lib/utils'
 
-type TabId = 'office' | 'dashboard' | 'employees' | 'scenario' | 'pipeline' | 'command'
+type TabId = 'office' | 'dashboard' | 'employees' | 'scenario' | 'pipeline' | 'documents' | 'command'
 
 const TABS: { id: TabId; label: string }[] = [
   { id: 'office',    label: '🏢 사무실' },
@@ -28,6 +29,7 @@ const TABS: { id: TabId; label: string }[] = [
   { id: 'employees', label: '👥 직원 49명' },
   { id: 'scenario',  label: '📋 시나리오' },
   { id: 'pipeline',  label: '🔄 파이프라인' },
+  { id: 'documents', label: '📂 문서함' },
   { id: 'command',   label: '💬 지시창' },
 ]
 
@@ -161,6 +163,12 @@ export default function OfficePage() {
           {activeTab === 'pipeline' && (
             <div className="h-full overflow-y-auto p-3 flex flex-col gap-3">
               <Pipeline />
+            </div>
+          )}
+
+          {activeTab === 'documents' && (
+            <div className="h-full overflow-hidden relative">
+              <Documents />
             </div>
           )}
 
