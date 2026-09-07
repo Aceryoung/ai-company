@@ -44,6 +44,9 @@ export function CommandPanel({ isMobile }: Props) {
   const visitedSessions = useOfficeStore((s) => s.visitedSessions)
   const setActiveSession = useOfficeStore((s) => s.setActiveSession)
   const addSessionLog = useOfficeStore((s) => s.addSessionLog)
+  const sessionSummaries = useOfficeStore((s) => s.sessionSummaries)
+  const setSessionSummary = useOfficeStore((s) => s.setSessionSummary)
+  const clearSessionLog = useOfficeStore((s) => s.clearSessionLog)
   const walkEmpTo = useOfficeStore((s) => s.walkEmpTo)
   const setEmpBubble = useOfficeStore((s) => s.setEmpBubble)
   const setEmpStatus = useOfficeStore((s) => s.setEmpStatus)
@@ -65,6 +68,7 @@ export function CommandPanel({ isMobile }: Props) {
   const { logUsage } = useUsageTracker()
   const [input, setInput] = useState('')
   const [isLoading, setIsLoading] = useState(false)
+  const [isSummarizing, setIsSummarizing] = useState(false)
   const [summarized, setSummarized] = useState<Set<string>>(new Set())
   const [mounted, setMounted] = useState(false)
   const [viewingReport, setViewingReport] = useState<{
@@ -738,6 +742,51 @@ export function CommandPanel({ isMobile }: Props) {
     addLog('sys', '🏛️ 회의가 종료되었습니다. 팀장들이 자리로 복귀합니다.')
   }, [meetingLeaderSeats, walkEmpTo, setActiveSession, addLog, setMeetingMode, setMeetingHistory, setMeetingLeaderSeats])
 
+  // 대화 요약 후 정리
+  const summarizeAndClear = useCallback(async () => {
+    const session = activeSession
+    const logs = useOfficeStore.getState().sessionLogs[session] ?? []
+    if (logs.length === 0) return
+
+    setIsSummarizing(true)
+    try {
+      // 대화 내용을 텍스트로 변환
+      const chatText = logs.map(m => {
+        const prefix = m.type === 'boss' ? '대표' : m.type === 'sys' ? '시스템' : '직원'
+        return `[${prefix}] ${m.text}`
+      }).join('\n')
+
+      // AI로 요약 요청 (일반 대화로 전달)
+      const aide = EMPLOYEES.find(e => e.code === 'AIDE')!
+      const res = await fetch('/api/employee-chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          employeeId: aide.id,
+          employeeName: aide.name,
+          dept: aide.dept,
+          role: aide.role,
+          speech: aide.speech,
+          message: `다음 대화 내용을 3줄 이내로 핵심만 요약해줘. 누가 무슨 지시를 했고, 결과가 어땠는지 위주로. 요약만 답해:\n\n${chatText.slice(0, 3000)}`,
+          history: [],
+        }),
+      })
+      const data = await res.json() as { reply: string }
+      const summary = data.reply || '(요약 실패)'
+
+      // 요약 저장 후 대화 정리
+      const prevSummary = sessionSummaries[session]
+      const fullSummary = prevSummary ? `${prevSummary}\n---\n${summary}` : summary
+      setSessionSummary(session, fullSummary)
+      clearSessionLog(session)
+      addLog('sys', `📋 이전 대화가 요약·정리되었습니다.`)
+    } catch {
+      addLog('sys', '⚠️ 대화 요약 중 오류가 발생했습니다.')
+    } finally {
+      setIsSummarizing(false)
+    }
+  }, [activeSession, sessionSummaries, setSessionSummary, clearSessionLog, addLog])
+
   // 팀장 회의 진행
   const startMeeting = useCallback(async (agenda: string) => {
     if (isLoading) return
@@ -964,7 +1013,19 @@ export function CommandPanel({ isMobile }: Props) {
               </button>
             </>
           ) : (
-            <span className="text-[#4af]">💬 대표 지시창</span>
+            <>
+              <span className="text-[#4af]">💬 대표 지시창</span>
+              {chatLog.length > 0 && (
+                <button
+                  onClick={summarizeAndClear}
+                  disabled={isSummarizing}
+                  className="text-[10px] px-2 py-0.5 bg-[#1a2332] text-[#6b8cbb] rounded hover:bg-[#2a3342] hover:text-[#ffa94d] transition-colors disabled:opacity-50"
+                  title="대화를 AI가 요약한 뒤 정리합니다"
+                >
+                  {isSummarizing ? '⏳ 요약 중…' : '🗑️ 대화 정리'}
+                </button>
+              )}
+            </>
           )}
         </div>
       )}
@@ -1072,6 +1133,27 @@ export function CommandPanel({ isMobile }: Props) {
               {c}
             </button>
           ))}
+        </div>
+      )}
+
+      {/* 세션 요약 표시 + 모바일 정리 버튼 */}
+      {mounted && (sessionSummaries[activeSession] || (isMobile && chatLog.length > 0)) && (
+        <div className="px-2.5 py-1.5 border-b border-[#1e3a5f] shrink-0 bg-[#0d1520] flex items-start gap-2">
+          {sessionSummaries[activeSession] && (
+            <div className="flex-1 min-w-0 text-[10px] text-[#6b8cbb] leading-relaxed">
+              📋 <span className="text-[#4af]">이전 대화 요약:</span>{' '}
+              <span className="text-[#8bacc8]">{sessionSummaries[activeSession]}</span>
+            </div>
+          )}
+          {isMobile && chatLog.length > 0 && (
+            <button
+              onClick={summarizeAndClear}
+              disabled={isSummarizing}
+              className="text-[10px] px-2 py-0.5 bg-[#1a2332] text-[#6b8cbb] rounded hover:text-[#ffa94d] transition-colors disabled:opacity-50 shrink-0 whitespace-nowrap"
+            >
+              {isSummarizing ? '⏳' : '🗑️ 정리'}
+            </button>
+          )}
         </div>
       )}
 

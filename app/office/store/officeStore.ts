@@ -149,8 +149,11 @@ interface OfficeStore {
   activeSession: string                           // 'main' | 'meeting' | dept 이름
   sessionLogs: Record<string, ChatMessage[]>      // 세션별 채팅 로그
   visitedSessions: string[]                       // 방문한 세션 목록 (탭 표시용)
+  sessionSummaries: Record<string, string>        // 세션별 대화 요약
   setActiveSession: (session: string) => void
   addSessionLog: (session: string, type: ChatMessage['type'], text: string) => void
+  setSessionSummary: (session: string, summary: string) => void
+  clearSessionLog: (session: string) => void
 
   // 회의 상태 (탭 전환해도 유지)
   meetingMode: boolean
@@ -311,6 +314,13 @@ export const useOfficeStore = create<OfficeStore>()(
     activeSession: 'main',
     sessionLogs: {},
     visitedSessions: ['main'],
+    sessionSummaries: (() => {
+      if (typeof window === 'undefined') return {}
+      try {
+        const saved = localStorage.getItem('session-summaries')
+        return saved ? (JSON.parse(saved) as Record<string, string>) : {}
+      } catch { return {} }
+    })(),
 
     hydrateChatLog: () => {
       if (typeof window === 'undefined') return
@@ -385,6 +395,21 @@ export const useOfficeStore = create<OfficeStore>()(
         try { localStorage.setItem('session-logs', JSON.stringify(nextLogs)) } catch { /* ignore */ }
         // chatLog는 activeSession이면 동기화
         const nextChatLog = session === s.activeSession ? sessionMsgs : s.chatLog
+        return { sessionLogs: nextLogs, chatLog: nextChatLog }
+      }),
+
+    setSessionSummary: (session, summary) =>
+      set((s) => {
+        const next = { ...s.sessionSummaries, [session]: summary }
+        try { localStorage.setItem('session-summaries', JSON.stringify(next)) } catch { /* ignore */ }
+        return { sessionSummaries: next }
+      }),
+
+    clearSessionLog: (session) =>
+      set((s) => {
+        const nextLogs = { ...s.sessionLogs, [session]: [] }
+        try { localStorage.setItem('session-logs', JSON.stringify(nextLogs)) } catch { /* ignore */ }
+        const nextChatLog = session === s.activeSession ? [] : s.chatLog
         return { sessionLogs: nextLogs, chatLog: nextChatLog }
       }),
 
