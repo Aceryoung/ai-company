@@ -962,6 +962,10 @@ export function OfficeCanvas() {
   const [hoveredEmp, setHoveredEmp] = useState<string | null>(null)
   const [selectedEmp, setSelectedEmp] = useState<string | null>(null)
   const [scale, setScale] = useState(1)
+  const hoveredRef = useRef<string | null>(null)
+  const selectedRef = useRef<string | null>(null)
+  hoveredRef.current = hoveredEmp
+  selectedRef.current = selectedEmp
 
   const empStates = useOfficeStore((s) => s.empStates)
   const setEmpBubble = useOfficeStore((s) => s.setEmpBubble)
@@ -1088,30 +1092,49 @@ export function OfficeCanvas() {
     return () => obs.disconnect()
   }, [CANVAS_W, CANVAS_H])
 
-  // ── 렌더 루프
-  const draw = useCallback(() => {
+  // ── 렌더 루프 (ref 기반 — effect에서 직접 호출)
+  const allEmployeesRef = useRef(allEmployees)
+  allEmployeesRef.current = allEmployees
+  const getSeatRef = useRef(getSeat)
+  getSeatRef.current = getSeat
+  const dynamicZonesRef = useRef(dynamicZones)
+  dynamicZonesRef.current = dynamicZones
+  const canvasSizeRef = useRef({ ROWS: BASE_ROWS, CANVAS_W: COLS * TILE, CANVAS_H: BASE_ROWS * TILE })
+  canvasSizeRef.current = { ROWS, CANVAS_W, CANVAS_H }
+  const tickRef = useRef(tickEmpBubbles)
+  tickRef.current = tickEmpBubbles
+  const setEmpBubbleRef = useRef(setEmpBubble)
+  setEmpBubbleRef.current = setEmpBubble
+
+  const drawFn = () => {
     const ctx = canvasRef.current?.getContext('2d')
     if (!ctx) return
     const states = useOfficeStore.getState().empStates
     const frame = frameRef.current++
+    const hoveredEmpVal = hoveredRef.current
+    const selectedEmpVal = selectedRef.current
+    const allEmps = allEmployeesRef.current
+    const getSeatFn = getSeatRef.current
+    const dynZones = dynamicZonesRef.current
+    const { ROWS: rows, CANVAS_W: cW, CANVAS_H: cH } = canvasSizeRef.current
 
     // 전체 배경 (밝은 회색)
     ctx.fillStyle = '#c8c0b4'
-    ctx.fillRect(0, 0, CANVAS_W, CANVAS_H)
+    ctx.fillRect(0, 0, cW, cH)
 
     // 외벽 (창문)
     for (let x = 0; x < COLS; x++) {
       drawWindowWall(ctx, x * TILE, 0)
-      drawWall(ctx, x * TILE, (ROWS - 1) * TILE)
+      drawWall(ctx, x * TILE, (rows - 1) * TILE)
     }
-    for (let y = 0; y < ROWS; y++) {
+    for (let y = 0; y < rows; y++) {
       drawWall(ctx, 0, y * TILE)
       drawWall(ctx, (COLS - 1) * TILE, y * TILE)
     }
 
     // 복도 바닥 (밝은 타일)
     for (let x = 1; x < COLS - 1; x++) {
-      for (let y = 1; y < ROWS - 1; y++) {
+      for (let y = 1; y < rows - 1; y++) {
         const px = x * TILE, py = y * TILE
         ctx.fillStyle = (x + y) % 2 === 0 ? '#d8d0c4' : '#d0c8bc'
         ctx.fillRect(px, py, TILE, TILE)
@@ -1123,11 +1146,11 @@ export function OfficeCanvas() {
     }
 
     // 부서별 구역 바닥 + 테두리 (정적 + 동적)
-    const allZones = [...DEPT_ZONES, ...dynamicZones]
+    const allZones = [...DEPT_ZONES, ...dynZones]
 
     // 부서별 활동 인원 카운트
     const zoneActivity: Map<string, number> = new Map()
-    for (const emp of allEmployees) {
+    for (const emp of allEmps) {
       const st = states[emp.id]
       if (st && (st.status === 'work' || st.status === 'boss')) {
         zoneActivity.set(emp.dept, (zoneActivity.get(emp.dept) ?? 0) + 1)
@@ -1200,8 +1223,8 @@ export function OfficeCanvas() {
 
     // ── 가구 배치
     // 각 직원 좌석에 책상
-    for (let i = 0; i < allEmployees.length; i++) {
-      const seat = getSeat(i)
+    for (let i = 0; i < allEmps.length; i++) {
+      const seat = getSeatFn(i)
       drawDesk(ctx, seat.x * TILE, (seat.y - 1) * TILE, frame)
     }
 
@@ -1276,7 +1299,7 @@ export function OfficeCanvas() {
     const MOODS: EmployeeMood[] = ['normal', 'happy', 'focused', 'tired', 'excited', 'coffee']
     if (frame % 3 === 0) { // 매 3프레임마다 체크 (성능)
       const idleUpdates: Record<string, Partial<EmployeeState>> = {}
-      for (const emp of allEmployees) {
+      for (const emp of allEmps) {
         const st = states[emp.id]
         if (!st || st.walking) continue
         // idle 타이머 감소
@@ -1293,8 +1316,8 @@ export function OfficeCanvas() {
           }
         } else if (newTimer <= 0 && st.returningHome) {
           // POI에 도착 후 → 자리로 복귀 대기 끝
-          const empIdx = allEmployees.indexOf(emp)
-          const seat = getSeat(empIdx)
+          const empIdx = allEmps.indexOf(emp)
+          const seat = getSeatFn(empIdx)
           idleUpdates[emp.id] = {
             tx: seat.x, ty: seat.y,
             walking: true,
@@ -1320,7 +1343,7 @@ export function OfficeCanvas() {
     // ── 직원 걷기 애니메이션 (x→tx, y→ty 보간)
     const WALK_SPEED = 0.15
     const stateUpdates: Record<string, Partial<EmployeeState>> = {}
-    for (const emp of allEmployees) {
+    for (const emp of allEmps) {
       const st = states[emp.id]
       if (!st || !st.walking) continue
       const dx = st.tx - st.x
@@ -1329,8 +1352,8 @@ export function OfficeCanvas() {
       if (dist < 0.2) {
         // 도착 — POI에 도착하면 잠시 머물다 복귀 예정
         const isAtHome = (() => {
-          const idx = allEmployees.indexOf(emp)
-          const seat = getSeat(idx)
+          const idx = allEmps.indexOf(emp)
+          const seat = getSeatFn(idx)
           return Math.abs(st.tx - seat.x) < 1 && Math.abs(st.ty - seat.y) < 1
         })()
         stateUpdates[emp.id] = {
@@ -1358,8 +1381,8 @@ export function OfficeCanvas() {
 
     // ── 근처 직원 대화 감지 (매 60프레임 = 5초마다 체크)
     if (frame % 60 === 0) {
-      for (let i = 0; i < allEmployees.length; i++) {
-        const st1 = states[allEmployees[i].id]
+      for (let i = 0; i < allEmps.length; i++) {
+        const st1 = states[allEmps[i].id]
         if (!st1 || st1.walking || st1.bubble) continue
         for (let j = i + 1; j < allEmployees.length; j++) {
           const st2 = states[allEmployees[j].id]
@@ -1368,14 +1391,14 @@ export function OfficeCanvas() {
           const dy = (st1.y - st2.y)
           const dist = Math.sqrt(dx * dx + dy * dy)
           // 2타일 이내 + 둘 다 자리에 없으면 (POI 근처) 대화
-          const seat1 = getSeat(i)
-          const seat2 = getSeat(j)
+          const seat1 = getSeatFn(i)
+          const seat2 = getSeatFn(j)
           const isAway1 = Math.abs(st1.x - seat1.x) > 1 || Math.abs(st1.y - seat1.y) > 1
           const isAway2 = Math.abs(st2.x - seat2.x) > 1 || Math.abs(st2.y - seat2.y) > 1
           if (dist < 2.5 && isAway1 && isAway2 && Math.random() > 0.6) {
             const chatMsgs = ['안녕~', '오늘 바빠?', '커피 한잔?', '점심 뭐 먹지', '화이팅!', '수고해요~', '오 반가워!']
             const msg = chatMsgs[Math.floor(Math.random() * chatMsgs.length)]
-            setEmpBubble(allEmployees[i].id, `💬 ${msg}`, 80)
+            setEmpBubbleRef.current(allEmps[i].id, `💬 ${msg}`, 80)
             break
           }
         }
@@ -1383,7 +1406,7 @@ export function OfficeCanvas() {
     }
 
     // ── 커피 마시기 이펙트 (커피머신 근처에서 idle)
-    for (const emp of allEmployees) {
+    for (const emp of allEmps) {
       const st = states[emp.id]
       if (!st || st.walking || st.status === 'work') continue
       const atCoffee = Math.abs(st.x - 17) < 1.5 && Math.abs(st.y - 7) < 1.5
@@ -1404,7 +1427,7 @@ export function OfficeCanvas() {
     }
 
     // ── 직원 렌더 (y좌표 순서)
-    const sorted = allEmployees.map((emp, i) => ({ emp, i, st: states[emp.id] }))
+    const sorted = allEmps.map((emp, i) => ({ emp, i, st: states[emp.id] }))
       .filter(e => e.st)
       .sort((a, b) => (a.st?.y ?? 0) - (b.st?.y ?? 0))
 
@@ -1413,7 +1436,7 @@ export function OfficeCanvas() {
       const px = st.x * TILE
       const py = st.y * TILE
 
-      drawCharacter(ctx, px, py, emp.deptColor, st.status, frame, i, hoveredEmp === emp.id, emp.name, emp.emoji)
+      drawCharacter(ctx, px, py, emp.deptColor, st.status, frame, i, hoveredEmpVal === emp.id, emp.name, emp.emoji)
 
       // 상태별 파티클 이펙트
       if (st.status === 'work') {
@@ -1427,7 +1450,7 @@ export function OfficeCanvas() {
         const text = st.bubble.slice(0, 18)
         ctx.font = '10px "Pretendard", sans-serif'
         const tw = ctx.measureText(text).width + 12
-        const bx = Math.max(2, Math.min(px + TILE / 2 - tw / 2, CANVAS_W - tw - 2))
+        const bx = Math.max(2, Math.min(px + TILE / 2 - tw / 2, cW - tw - 2))
         const by = py - 22
 
         ctx.fillStyle = 'rgba(255,255,255,0.95)'
@@ -1451,18 +1474,18 @@ export function OfficeCanvas() {
     }
 
     // 앰비언트 파티클 (최상단 레이어)
-    drawAmbientParticles(ctx, frame, CANVAS_H)
+    drawAmbientParticles(ctx, frame, cH)
 
     // ── 선택된 직원 상세 패널 (향상)
-    if (selectedEmp) {
-      const emp = allEmployees.find(e => e.id === selectedEmp)
-      const st = states[selectedEmp] ?? { status: 'idle' as const }
+    if (selectedEmpVal) {
+      const emp = allEmps.find(e => e.id === selectedEmpVal)
+      const st = states[selectedEmpVal] ?? { status: 'idle' as const }
       if (emp) {
         const hasRepos = emp.repos && emp.repos.length > 0
         const panelW = 220
         const panelH = hasRepos ? 100 : 82
-        const panelX = CANVAS_W - panelW - 10
-        const panelY = CANVAS_H - panelH - 10
+        const panelX = cW - panelW - 10
+        const panelY = cH - panelH - 10
 
         // 그림자
         ctx.shadowColor = 'rgba(0,0,0,0.2)'
@@ -1539,14 +1562,10 @@ export function OfficeCanvas() {
       }
     }
 
-    tickEmpBubbles()
-  }, [hoveredEmp, selectedEmp, tickEmpBubbles, ROWS, CANVAS_W, CANVAS_H, allEmployees, getSeat, dynamicZones])
+    tickRef.current()
+  }
 
-  // draw를 ref로 안정화 — 루프가 dependency 변경으로 끊기지 않도록
-  const drawRef = useRef(draw)
-  useEffect(() => { drawRef.current = draw }, [draw])
-
-  // 애니메이션 루프 (한 번만 시작, 절대 재시작 안 함)
+  // 애니메이션 루프 (마운트 1회, ref 경유로 최신 상태 항상 참조)
   useEffect(() => {
     let lastTime = 0
     const interval = 1000 / FPS
@@ -1556,7 +1575,7 @@ export function OfficeCanvas() {
       animRef.current = requestAnimationFrame(loop)
       if (time - lastTime < interval) return
       lastTime = time
-      drawRef.current()
+      drawFn()
     }
     animRef.current = requestAnimationFrame(loop)
     return () => { running = false; cancelAnimationFrame(animRef.current) }
