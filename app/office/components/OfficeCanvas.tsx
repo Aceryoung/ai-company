@@ -2,13 +2,13 @@
 'use client'
 
 import { useRef, useEffect, useCallback, useState, useMemo } from 'react'
-import { useOfficeStore, type EmployeeState } from '../store/officeStore'
+import { useOfficeStore, type EmployeeState, type EmployeeMood } from '../store/officeStore'
 import { EMPLOYEES, STATUS_COLORS, DEPT_COLORS } from '../data/employees'
 
 // ── 상수
 const TILE = 36
 const COLS = 28
-const BASE_ROWS = 22          // 기본 캔버스 높이 (정적 직원만 있을 때)
+const BASE_ROWS = 27          // 기본 캔버스 높이 (휴게실 포함)
 const STATIC_SEATS = 49       // 정적 좌석 수 (이사 + 마케팅 + EMPLOYEES + 레드팀)
 const FPS = 12
 
@@ -146,6 +146,8 @@ const DEPT_ZONES: DeptZone[] = [
   { dept: '경영', label: '👔 경영', x: 24, y: 11, w: 3, h: 4, floor: '#f5ecd0', floorAlt: '#ede4c8', borderColor: '#ccaa00' },
   // 마케팅
   { dept: '마케팅', label: '📣 마케팅', x: 23, y: 16, w: 4, h: 4, floor: '#f4e0e0', floorAlt: '#ecd8d8', borderColor: '#cc4466' },
+  // 휴게실
+  { dept: '휴게실', label: '☕ 휴게실', x: 1, y: 21, w: 12, h: 5, floor: '#ece8f4', floorAlt: '#e4e0ec', borderColor: '#8866bb' },
 ]
 
 // ── 좌석 위치 (부서별 배치)
@@ -348,6 +350,267 @@ function drawMeetingTable(ctx: CanvasRenderingContext2D, px: number, py: number,
   }
 }
 
+// ── 커피머신
+function drawCoffeeMachine(ctx: CanvasRenderingContext2D, px: number, py: number, frame: number) {
+  // 본체
+  ctx.fillStyle = '#444'
+  ctx.fillRect(px + 8, py + 8, 20, 24)
+  ctx.fillStyle = '#555'
+  ctx.fillRect(px + 10, py + 10, 16, 20)
+  // 상단 물탱크
+  ctx.fillStyle = '#666'
+  ctx.fillRect(px + 10, py + 4, 16, 8)
+  ctx.fillStyle = '#5588cc'
+  ctx.fillRect(px + 12, py + 6, 12, 4)
+  // 컵 받침
+  ctx.fillStyle = '#888'
+  ctx.fillRect(px + 12, py + 26, 12, 4)
+  // 컵
+  ctx.fillStyle = '#fff'
+  ctx.fillRect(px + 14, py + 22, 8, 6)
+  ctx.fillStyle = '#eee'
+  ctx.fillRect(px + 15, py + 23, 6, 4)
+  // 커피 색 (채워지는 애니)
+  if (frame % 120 < 60) {
+    const fill = Math.min((frame % 60) / 30, 1)
+    ctx.fillStyle = '#6b3a1a'
+    ctx.fillRect(px + 15, py + 27 - fill * 4, 6, fill * 4)
+  }
+  // 버튼 (빨간불)
+  ctx.fillStyle = frame % 120 < 60 ? '#f44' : '#4a4'
+  ctx.fillRect(px + 24, py + 14, 3, 3)
+  // 스팀 (동작 중일 때)
+  if (frame % 120 < 60) {
+    ctx.fillStyle = 'rgba(200,200,200,0.3)'
+    const steamY = Math.sin(frame * 0.2) * 2
+    ctx.fillRect(px + 16, py + 16 + steamY, 2, 4)
+    ctx.fillRect(px + 20, py + 14 + steamY, 2, 5)
+  }
+}
+
+// ── 화이트보드
+function drawWhiteboard(ctx: CanvasRenderingContext2D, px: number, py: number, frame: number) {
+  // 프레임
+  ctx.fillStyle = '#aaa'
+  ctx.fillRect(px + 2, py + 2, TILE - 4, TILE - 8)
+  // 보드 면
+  ctx.fillStyle = '#f8f8f0'
+  ctx.fillRect(px + 4, py + 4, TILE - 8, TILE - 12)
+  // 글씨 (다양한 색)
+  const colors = ['#d44', '#44d', '#4a4', '#da4']
+  for (let i = 0; i < 4; i++) {
+    ctx.fillStyle = colors[i]
+    const lineW = 8 + ((i * 7 + frame) % 5) * 2
+    ctx.fillRect(px + 6, py + 6 + i * 5, lineW, 2)
+  }
+  // 하단 마커 트레이
+  ctx.fillStyle = '#888'
+  ctx.fillRect(px + 4, py + TILE - 7, TILE - 8, 3)
+  // 마커들
+  ctx.fillStyle = '#d44'
+  ctx.fillRect(px + 6, py + TILE - 10, 3, 5)
+  ctx.fillStyle = '#44d'
+  ctx.fillRect(px + 11, py + TILE - 10, 3, 5)
+  ctx.fillStyle = '#4a4'
+  ctx.fillRect(px + 16, py + TILE - 10, 3, 5)
+}
+
+// ── 프린터
+function drawPrinter(ctx: CanvasRenderingContext2D, px: number, py: number, frame: number) {
+  // 본체
+  ctx.fillStyle = '#ddd'
+  ctx.fillRect(px + 6, py + 14, 24, 14)
+  ctx.fillStyle = '#ccc'
+  ctx.fillRect(px + 8, py + 16, 20, 10)
+  // 상단 급지 트레이
+  ctx.fillStyle = '#eee'
+  ctx.fillRect(px + 8, py + 10, 20, 6)
+  // 종이 (급지대)
+  ctx.fillStyle = '#fff'
+  ctx.fillRect(px + 10, py + 8, 16, 4)
+  // 출력 트레이
+  ctx.fillStyle = '#bbb'
+  ctx.fillRect(px + 8, py + 26, 20, 4)
+  // 인쇄 중 종이
+  if (frame % 180 < 40) {
+    ctx.fillStyle = '#fff'
+    const paperOut = Math.min((frame % 40) / 20, 1)
+    ctx.fillRect(px + 10, py + 26, 16, 2 + paperOut * 6)
+    // 인쇄 내용
+    if (paperOut > 0.5) {
+      ctx.fillStyle = '#333'
+      ctx.fillRect(px + 12, py + 28, 10, 1)
+      ctx.fillRect(px + 12, py + 30, 8, 1)
+    }
+  }
+  // LED
+  ctx.fillStyle = frame % 180 < 40 ? '#4af' : '#4a4'
+  ctx.fillRect(px + 26, py + 18, 2, 2)
+}
+
+// ── 소파 (휴게실)
+function drawSofa(ctx: CanvasRenderingContext2D, px: number, py: number, color: string) {
+  // 등받이
+  ctx.fillStyle = color
+  ctx.fillRect(px + 2, py + 4, 32, 10)
+  // 쿠션
+  const lighter = color + 'cc'
+  ctx.fillStyle = lighter
+  ctx.fillRect(px + 4, py + 12, 13, 16)
+  ctx.fillRect(px + 19, py + 12, 13, 16)
+  // 쿠션 디테일
+  ctx.fillStyle = 'rgba(255,255,255,0.15)'
+  ctx.fillRect(px + 6, py + 14, 9, 4)
+  ctx.fillRect(px + 21, py + 14, 9, 4)
+  // 팔걸이
+  ctx.fillStyle = color
+  ctx.fillRect(px, py + 6, 4, 22)
+  ctx.fillRect(px + 32, py + 6, 4, 22)
+}
+
+// ── 자판기
+function drawVendingMachine(ctx: CanvasRenderingContext2D, px: number, py: number, frame: number) {
+  // 본체
+  ctx.fillStyle = '#3355aa'
+  ctx.fillRect(px + 4, py + 2, 28, 32)
+  ctx.fillStyle = '#4466bb'
+  ctx.fillRect(px + 6, py + 4, 24, 28)
+  // 진열대 (음료수들)
+  const drinkColors = ['#f44', '#4a4', '#fa4', '#44f', '#f4a', '#4af']
+  for (let r = 0; r < 3; r++) {
+    for (let c = 0; c < 4; c++) {
+      ctx.fillStyle = drinkColors[(r * 4 + c) % drinkColors.length]
+      ctx.fillRect(px + 8 + c * 5, py + 6 + r * 7, 4, 5)
+    }
+  }
+  // 투입구
+  ctx.fillStyle = '#222'
+  ctx.fillRect(px + 22, py + 28, 6, 3)
+  // LED
+  ctx.fillStyle = frame % 60 < 30 ? '#4f4' : '#2a2'
+  ctx.fillRect(px + 28, py + 6, 2, 2)
+}
+
+// ── TV/스크린 (벽걸이)
+function drawTV(ctx: CanvasRenderingContext2D, px: number, py: number, frame: number) {
+  // 프레임
+  ctx.fillStyle = '#222'
+  ctx.fillRect(px + 2, py + 2, TILE * 2 - 4, TILE - 8)
+  // 화면
+  const flicker = frame % 180 < 120 ? '#2244aa' : '#224488'
+  ctx.fillStyle = flicker
+  ctx.fillRect(px + 4, py + 4, TILE * 2 - 8, TILE - 12)
+  // 화면 내용 (차트/그래프)
+  ctx.fillStyle = '#4af'
+  for (let i = 0; i < 5; i++) {
+    const h = 4 + Math.sin(frame * 0.05 + i * 1.2) * 6
+    ctx.fillRect(px + 8 + i * 12, py + TILE - 14 - Math.abs(h), 8, Math.abs(h))
+  }
+  // 스탠드
+  ctx.fillStyle = '#333'
+  ctx.fillRect(px + TILE - 3, py + TILE - 6, 6, 6)
+}
+
+// ── 쿠션/빈백
+function drawBeanbag(ctx: CanvasRenderingContext2D, px: number, py: number, color: string) {
+  ctx.fillStyle = color
+  ctx.beginPath()
+  ctx.ellipse(px + TILE / 2, py + TILE / 2 + 4, 14, 11, 0, 0, Math.PI * 2)
+  ctx.fill()
+  ctx.fillStyle = 'rgba(255,255,255,0.2)'
+  ctx.beginPath()
+  ctx.ellipse(px + TILE / 2 - 2, py + TILE / 2, 6, 4, -0.3, 0, Math.PI * 2)
+  ctx.fill()
+}
+
+// ── 러그 (부서 입구)
+function drawRug(ctx: CanvasRenderingContext2D, px: number, py: number, w: number, h: number, color: string) {
+  ctx.globalAlpha = 0.25
+  ctx.fillStyle = color
+  ctx.beginPath()
+  ctx.roundRect(px, py, w, h, 4)
+  ctx.fill()
+  // 테두리 무늬
+  ctx.strokeStyle = color
+  ctx.lineWidth = 1
+  ctx.globalAlpha = 0.35
+  ctx.beginPath()
+  ctx.roundRect(px + 3, py + 2, w - 6, h - 4, 2)
+  ctx.stroke()
+  ctx.globalAlpha = 1
+}
+
+// ── 부서 글로우 (활동 강도에 따라)
+function drawZoneGlow(ctx: CanvasRenderingContext2D, zone: DeptZone, activeCount: number, frame: number) {
+  if (activeCount === 0) return
+  const zx = zone.x * TILE, zy = zone.y * TILE
+  const zw = zone.w * TILE, zh = zone.h * TILE
+  const intensity = Math.min(activeCount / 4, 1) * 0.12
+  const pulse = Math.sin(frame * 0.03) * 0.03
+  ctx.globalAlpha = intensity + pulse
+  ctx.fillStyle = zone.borderColor
+  ctx.beginPath()
+  ctx.roundRect(zx - 2, zy - 2, zw + 4, zh + 4, 6)
+  ctx.fill()
+  ctx.globalAlpha = 1
+}
+
+// ── 타이핑 파티클
+function drawTypingParticles(ctx: CanvasRenderingContext2D, px: number, py: number, frame: number, empIdx: number) {
+  const seed = empIdx * 137
+  for (let i = 0; i < 3; i++) {
+    const t = (frame * 0.08 + i * 2.1 + seed) % 6.28
+    const dx = Math.cos(t) * 8
+    const dy = -Math.abs(Math.sin(t * 1.5)) * 10 - 4
+    const alpha = 0.3 + Math.sin(frame * 0.15 + i) * 0.2
+    ctx.globalAlpha = alpha
+    ctx.fillStyle = '#4af'
+    ctx.fillRect(px + TILE / 2 + dx - 1, py - 6 + dy, 2, 2)
+  }
+  ctx.globalAlpha = 1
+}
+
+// ── 완료 반짝임
+function drawDoneSparkle(ctx: CanvasRenderingContext2D, px: number, py: number, frame: number, empIdx: number) {
+  const seed = empIdx * 97
+  for (let i = 0; i < 4; i++) {
+    const t = (frame * 0.06 + i * 1.57 + seed) % 6.28
+    const r = 12 + Math.sin(frame * 0.1 + i) * 4
+    const sx = px + TILE / 2 + Math.cos(t) * r
+    const sy = py + TILE / 2 + Math.sin(t) * r
+    const alpha = 0.4 + Math.sin(frame * 0.2 + i * 0.8) * 0.3
+    ctx.globalAlpha = alpha
+    ctx.fillStyle = '#ffd700'
+    // 십자 모양 반짝임
+    ctx.fillRect(sx - 1, sy - 3, 2, 6)
+    ctx.fillRect(sx - 3, sy - 1, 6, 2)
+  }
+  ctx.globalAlpha = 1
+}
+
+// ── 앰비언트 파티클 (부유하는 먼지/빛)
+const AMBIENT_PARTICLES: { x: number; y: number; speed: number; size: number; alpha: number }[] = []
+for (let i = 0; i < 30; i++) {
+  AMBIENT_PARTICLES.push({
+    x: Math.random() * 28 * TILE,
+    y: Math.random() * 22 * TILE,
+    speed: 0.1 + Math.random() * 0.3,
+    size: 1 + Math.random() * 2,
+    alpha: 0.05 + Math.random() * 0.1,
+  })
+}
+function drawAmbientParticles(ctx: CanvasRenderingContext2D, frame: number, maxH: number) {
+  for (const p of AMBIENT_PARTICLES) {
+    p.y -= p.speed
+    p.x += Math.sin(frame * 0.01 + p.y * 0.01) * 0.3
+    if (p.y < 0) { p.y = maxH; p.x = Math.random() * 28 * TILE }
+    ctx.globalAlpha = p.alpha + Math.sin(frame * 0.02 + p.x * 0.005) * 0.03
+    ctx.fillStyle = '#ffe8a0'
+    ctx.fillRect(p.x, p.y, p.size, p.size)
+  }
+  ctx.globalAlpha = 1
+}
+
 // ── 캐릭터 스프라이트
 function drawCharacter(
   ctx: CanvasRenderingContext2D,
@@ -363,7 +626,13 @@ function drawCharacter(
   const traits = CHAR_TRAITS[empIdx] ?? CHAR_TRAITS[0]
   const hairColor = HAIR_COLORS[empIdx % HAIR_COLORS.length]
   const skin = traits.skinTone
-  const bounce = Math.sin(frame * 0.3 + empIdx) * (status === 'work' ? 1.5 : 0.5)
+  // 걷기 상태 감지
+  const empState = useOfficeStore.getState().empStates[EMPLOYEES[empIdx]?.id ?? ''] ?? null
+  const isWalking = empState?.walking ?? false
+  const walkCycle = isWalking ? Math.sin(frame * 0.6 + empIdx) : 0
+  const bounce = isWalking
+    ? Math.abs(Math.sin(frame * 0.6 + empIdx)) * 2  // 걸을 때 통통 튀기
+    : Math.sin(frame * 0.3 + empIdx) * (status === 'work' ? 1.5 : 0.5)
 
   // 그림자
   ctx.fillStyle = 'rgba(0,0,0,0.15)'
@@ -373,27 +642,24 @@ function drawCharacter(
 
   const cy = py + bounce
 
-  // ── 다리 + 신발
+  // ── 다리 + 신발 (걸을 때 다리 움직임)
+  const legSwing = isWalking ? Math.round(walkCycle * 3) : 0
   if (traits.isFemale) {
-    // 치마/스커트 느낌 → 짧은 다리
     ctx.fillStyle = deptColor
-    ctx.fillRect(px + 10, cy + 26, 16, 3) // 치마 끝단
+    ctx.fillRect(px + 10, cy + 26, 16, 3)
     ctx.fillStyle = skin
-    ctx.fillRect(px + 12, cy + 29, 4, 3)
-    ctx.fillRect(px + 20, cy + 29, 4, 3)
-    // 구두
+    ctx.fillRect(px + 12 + legSwing, cy + 29, 4, 3)
+    ctx.fillRect(px + 20 - legSwing, cy + 29, 4, 3)
     ctx.fillStyle = '#444'
-    ctx.fillRect(px + 11, cy + 31, 6, 2)
-    ctx.fillRect(px + 19, cy + 31, 6, 2)
+    ctx.fillRect(px + 11 + legSwing, cy + 31, 6, 2)
+    ctx.fillRect(px + 19 - legSwing, cy + 31, 6, 2)
   } else {
-    // 바지
     ctx.fillStyle = '#2a2a44'
-    ctx.fillRect(px + 12, cy + 26, 5, 6)
-    ctx.fillRect(px + 19, cy + 26, 5, 6)
-    // 신발
+    ctx.fillRect(px + 12 + legSwing, cy + 26, 5, 6)
+    ctx.fillRect(px + 19 - legSwing, cy + 26, 5, 6)
     ctx.fillStyle = '#333'
-    ctx.fillRect(px + 11, cy + 31, 7, 2)
-    ctx.fillRect(px + 18, cy + 31, 7, 2)
+    ctx.fillRect(px + 11 + legSwing, cy + 31, 7, 2)
+    ctx.fillRect(px + 18 - legSwing, cy + 31, 7, 2)
   }
 
   // ── 몸통 (셔츠/블라우스)
@@ -413,14 +679,47 @@ function drawCharacter(
     ctx.fillRect(px + 16, cy + 18, 5, 2) // 매듭
   }
 
-  // ── 팔
+  // ── 기지개 감지 (idleTimer가 낮을 때 = 오래 앉아있을 때)
+  const idleT = empState?.idleTimer ?? 200
+  const isStretching = !isWalking && status === 'idle' && idleT > 0 && idleT < 30 && (empIdx % 3 === 0)
+
+  // ── 의자 회전 (idle 상태에서 미세 움직임)
+  const chairWobble = (!isWalking && status === 'idle') ? Math.sin(frame * 0.04 + empIdx * 1.7) * 0.5 : 0
+
+  // ── 팔 (걸을 때 팔 흔들기 / 기지개 / 타이핑)
+  let leftArmY = cy + 17
+  let rightArmY = cy + 17
+  let leftHandY = cy + 25
+  let rightHandY = cy + 25
+
+  if (isStretching) {
+    // 기지개 — 팔을 위로 뻗기
+    const stretchPhase = Math.sin(frame * 0.15) * 6
+    leftArmY = cy + 11 - stretchPhase
+    rightArmY = cy + 11 - stretchPhase
+    leftHandY = cy + 19 - stretchPhase
+    rightHandY = cy + 19 - stretchPhase
+  } else if (isWalking) {
+    const armSwing = Math.round(walkCycle * 2)
+    leftArmY = cy + 17 - armSwing
+    rightArmY = cy + 17 + armSwing
+    leftHandY = cy + 25 - armSwing
+    rightHandY = cy + 25 + armSwing
+  } else if (status === 'work') {
+    // 타이핑 — 손이 작게 움직임
+    const typeL = Math.sin(frame * 0.8 + empIdx) * 1.5
+    const typeR = Math.sin(frame * 0.8 + empIdx + 1.5) * 1.5
+    leftHandY = cy + 25 + typeL
+    rightHandY = cy + 25 + typeR
+  }
+
   ctx.fillStyle = deptColor
-  ctx.fillRect(px + 5, cy + 17, 5, 9)
-  ctx.fillRect(px + 26, cy + 17, 5, 9)
+  ctx.fillRect(px + 5 + chairWobble, leftArmY, 5, 9)
+  ctx.fillRect(px + 26 + chairWobble, rightArmY, 5, 9)
   // 손
   ctx.fillStyle = skin
-  ctx.fillRect(px + 5, cy + 25, 5, 3)
-  ctx.fillRect(px + 26, cy + 25, 5, 3)
+  ctx.fillRect(px + 5 + chairWobble, leftHandY, 5, 3)
+  ctx.fillRect(px + 26 + chairWobble, rightHandY, 5, 3)
 
   // ── 머리 (얼굴)
   ctx.fillStyle = skin
@@ -480,8 +779,16 @@ function drawCharacter(
       break
   }
 
-  // ── 눈
-  if (status === 'work') {
+  // ── 눈 (깜빡임: 4초 주기, 3프레임 감김)
+  const blinkCycle = (frame + empIdx * 37) % 48 // ~4초 @12fps
+  const isBlinking = blinkCycle >= 45 // 마지막 3프레임 = 감김
+
+  if (isBlinking) {
+    // 눈 감은 상태 —
+    ctx.fillStyle = '#222'
+    ctx.fillRect(px + 12, cy + 11, 5, 1)
+    ctx.fillRect(px + 20, cy + 11, 5, 1)
+  } else if (status === 'work') {
     // 집중 눈 — 일자
     ctx.fillStyle = '#222'
     ctx.fillRect(px + 13, cy + 10, 2, 3)
@@ -500,17 +807,19 @@ function drawCharacter(
     ctx.fillRect(px + 20, cy + 9, 1, 2)
     ctx.fillRect(px + 23, cy + 9, 1, 2)
   } else {
-    // 일반 눈 (흰자 + 동자)
+    // 일반 눈 (흰자 + 동자) — 고개 돌리기: 동자 위치가 살짝 이동
+    const lookDir = Math.sin(frame * 0.02 + empIdx * 2.3) // -1~1 부드러운 이동
+    const eyeShift = Math.round(lookDir * 1) // -1, 0, 1
     ctx.fillStyle = '#fff'
     ctx.fillRect(px + 12, cy + 9, 5, 4)
     ctx.fillRect(px + 20, cy + 9, 5, 4)
     ctx.fillStyle = '#222'
-    ctx.fillRect(px + 14, cy + 10, 3, 3)
-    ctx.fillRect(px + 22, cy + 10, 3, 3)
+    ctx.fillRect(px + 14 + eyeShift, cy + 10, 3, 3)
+    ctx.fillRect(px + 22 + eyeShift, cy + 10, 3, 3)
     // 눈 하이라이트
     ctx.fillStyle = '#fff'
-    ctx.fillRect(px + 14, cy + 10, 1, 1)
-    ctx.fillRect(px + 22, cy + 10, 1, 1)
+    ctx.fillRect(px + 14 + eyeShift, cy + 10, 1, 1)
+    ctx.fillRect(px + 22 + eyeShift, cy + 10, 1, 1)
   }
 
   // ── 안경
@@ -559,7 +868,13 @@ function drawCharacter(
   }
 
   // ── 입
-  if (status === 'done') {
+  if (isStretching) {
+    // 하품 — 큰 입
+    ctx.fillStyle = '#c66'
+    ctx.fillRect(px + 15, cy + 14, 6, 4)
+    ctx.fillStyle = '#933'
+    ctx.fillRect(px + 16, cy + 15, 4, 2)
+  } else if (status === 'done') {
     // 웃는 입
     ctx.fillStyle = '#e66'
     ctx.fillRect(px + 14, cy + 15, 8, 1)
@@ -575,13 +890,19 @@ function drawCharacter(
     ctx.fillRect(px + 15, cy + 16, 6, 1)
   }
 
-  // ── 상태 이모지 (머리 위)
+  // ── 상태/기분 이모지 (머리 위)
   const statusEmoji: Record<string, string> = {
     idle: '💤', work: '💻', done: '✅', boss: '📢', link: '🔗'
   }
+  const moodEmoji: Record<string, string> = {
+    normal: '', happy: '😊', focused: '🎯', tired: '😴', excited: '🎉', coffee: '☕'
+  }
   ctx.font = '10px sans-serif'
   ctx.textAlign = 'center'
-  ctx.fillText(statusEmoji[status] ?? '💤', px + TILE / 2, cy + 1)
+  // 기분 이모지가 있으면 기분을 표시, 없으면 상태 이모지
+  const mood = empState?.mood ?? 'normal'
+  const displayEmoji = moodEmoji[mood] || statusEmoji[status] || '💤'
+  ctx.fillText(displayEmoji, px + TILE / 2, cy + 1)
   ctx.textAlign = 'left'
 
   // 작업중 펄스 이펙트
@@ -605,11 +926,31 @@ function drawCharacter(
   ctx.fillText(name, px + TILE / 2, py + TILE + 9)
   ctx.textAlign = 'left'
 
-  // 호버 시 강조
+  // 호버 시 강조 (향상된 글로우 + 하이라이트)
   if (isHovered) {
-    ctx.strokeStyle = '#ff8800'
+    // 외곽 글로우
+    ctx.shadowColor = deptColor
+    ctx.shadowBlur = 12
+    ctx.strokeStyle = deptColor
     ctx.lineWidth = 2
-    ctx.strokeRect(px + 3, cy + 0, TILE - 6, TILE - 2)
+    ctx.beginPath()
+    ctx.roundRect(px + 2, cy - 1, TILE - 4, TILE, 4)
+    ctx.stroke()
+    ctx.shadowBlur = 0
+    // 내부 하이라이트
+    ctx.globalAlpha = 0.15
+    ctx.fillStyle = '#fff'
+    ctx.beginPath()
+    ctx.roundRect(px + 2, cy - 1, TILE - 4, TILE, 4)
+    ctx.fill()
+    ctx.globalAlpha = 1
+    // 포인터 화살표 (위)
+    ctx.fillStyle = deptColor
+    ctx.beginPath()
+    ctx.moveTo(px + TILE / 2 - 4, cy - 5)
+    ctx.lineTo(px + TILE / 2, cy - 9)
+    ctx.lineTo(px + TILE / 2 + 4, cy - 5)
+    ctx.fill()
   }
 }
 
@@ -708,11 +1049,14 @@ export function OfficeCanvas() {
             ...s.empStates,
             [emp.id]: {
               status: 'idle',
+              mood: 'normal' as EmployeeMood,
               bubble: '',
               bubbleTimer: 0,
               x: seat.x, y: seat.y,
               tx: seat.x, ty: seat.y,
               walking: false,
+              idleTimer: 200 + Math.floor(Math.random() * 600),
+              returningHome: false,
             },
           },
         }))
@@ -780,9 +1124,22 @@ export function OfficeCanvas() {
 
     // 부서별 구역 바닥 + 테두리 (정적 + 동적)
     const allZones = [...DEPT_ZONES, ...dynamicZones]
+
+    // 부서별 활동 인원 카운트
+    const zoneActivity: Map<string, number> = new Map()
+    for (const emp of allEmployees) {
+      const st = states[emp.id]
+      if (st && (st.status === 'work' || st.status === 'boss')) {
+        zoneActivity.set(emp.dept, (zoneActivity.get(emp.dept) ?? 0) + 1)
+      }
+    }
+
     for (const zone of allZones) {
       const zx = zone.x * TILE, zy = zone.y * TILE
       const zw = zone.w * TILE, zh = zone.h * TILE
+
+      // 글로우 이펙트 (활동 강도 기반)
+      drawZoneGlow(ctx, zone, zoneActivity.get(zone.dept) ?? 0, frame)
 
       // 바닥
       for (let dy = 0; dy < zone.h; dy++) {
@@ -791,25 +1148,54 @@ export function OfficeCanvas() {
         }
       }
 
-      // 방 테두리
+      // 러그 (일부 구역에)
+      if (zone.dept === '경영' || zone.dept === 'CEO') {
+        drawRug(ctx, zx + 8, zy + zh - TILE + 4, zw - 16, TILE - 8, zone.borderColor)
+      }
+
+      // 방 테두리 (향상된 스타일)
       ctx.strokeStyle = zone.borderColor
       ctx.lineWidth = 2
-      ctx.globalAlpha = 0.6
-      ctx.strokeRect(zx + 1, zy + 1, zw - 2, zh - 2)
+      ctx.globalAlpha = 0.7
+      ctx.beginPath()
+      ctx.roundRect(zx + 1, zy + 1, zw - 2, zh - 2, 3)
+      ctx.stroke()
       ctx.globalAlpha = 1
 
-      // 방 라벨 (상단) — 밝은 배경 위 화이트 바
+      // 방 라벨 (향상 — 둥근 배지 스타일)
       ctx.font = 'bold 11px "Pretendard", sans-serif'
-      const labelW = ctx.measureText(zone.label).width + 14
-      // 라벨 배경 (흰색 반투명)
-      ctx.fillStyle = 'rgba(255,255,255,0.85)'
-      ctx.fillRect(zx + 4, zy + 3, labelW, 18)
+      const activeInZone = zoneActivity.get(zone.dept) ?? 0
+      const labelText = zone.label
+      const labelW = ctx.measureText(labelText).width + 14
+      const countText = activeInZone > 0 ? `${activeInZone}` : ''
+      const countW = countText ? ctx.measureText(countText).width + 10 : 0
+      // 라벨 배경 (둥근 필)
+      ctx.fillStyle = 'rgba(255,255,255,0.9)'
+      ctx.beginPath()
+      ctx.roundRect(zx + 4, zy + 3, labelW + countW + 4, 18, 4)
+      ctx.fill()
       // 라벨 좌측 색상 바
       ctx.fillStyle = zone.borderColor
-      ctx.fillRect(zx + 4, zy + 3, 3, 18)
+      ctx.beginPath()
+      ctx.roundRect(zx + 4, zy + 3, 3, 18, [4, 0, 0, 4])
+      ctx.fill()
       // 라벨 텍스트
       ctx.fillStyle = '#333'
-      ctx.fillText(zone.label, zx + 10, zy + 16)
+      ctx.fillText(labelText, zx + 10, zy + 16)
+      // 활동 인원 뱃지
+      if (countText) {
+        const badgeX = zx + 12 + labelW
+        ctx.fillStyle = zone.borderColor
+        ctx.beginPath()
+        ctx.arc(badgeX, zy + 12, 7, 0, Math.PI * 2)
+        ctx.fill()
+        ctx.fillStyle = '#fff'
+        ctx.font = 'bold 8px "Pretendard", sans-serif'
+        ctx.textAlign = 'center'
+        ctx.fillText(countText, badgeX, zy + 15)
+        ctx.textAlign = 'left'
+        ctx.font = 'bold 11px "Pretendard", sans-serif'
+      }
     }
 
     // ── 가구 배치
@@ -826,6 +1212,8 @@ export function OfficeCanvas() {
     drawPlant(ctx, 10 * TILE, 6 * TILE, frame)
     drawPlant(ctx, 5 * TILE, 11 * TILE, frame)
     drawPlant(ctx, 17 * TILE, 11 * TILE, frame)
+    drawPlant(ctx, 8 * TILE, 16 * TILE, frame)
+    drawPlant(ctx, 26 * TILE, 6 * TILE, frame)
 
     // 정수기
     drawWaterCooler(ctx, 16 * TILE, 6 * TILE)
@@ -835,8 +1223,35 @@ export function OfficeCanvas() {
     drawBookshelf(ctx, 22 * TILE, 11 * TILE)
     drawBookshelf(ctx, 7 * TILE, 16 * TILE)
 
+    // 커피머신 (복도/휴게 공간 — 검수 영역 피해서 배치)
+    drawCoffeeMachine(ctx, 17 * TILE, 6 * TILE, frame)
+
+    // 화이트보드 (회의실, 기획)
+    drawWhiteboard(ctx, 21 * TILE, 16 * TILE, frame)
+    drawWhiteboard(ctx, 14 * TILE, 1 * TILE, frame)
+
+    // 프린터 (레포팀 근처, 운영 근처)
+    drawPrinter(ctx, 8 * TILE, 18 * TILE, frame)
+    drawPrinter(ctx, 22 * TILE, 8 * TILE, frame)
+
     // 회의실 테이블
     drawMeetingTable(ctx, 11 * TILE + 4, 17 * TILE + 8, 4 * TILE - 8, 2 * TILE - 8)
+
+    // ── 휴게실 가구
+    drawSofa(ctx, 2 * TILE, 22 * TILE, '#7755aa')
+    drawSofa(ctx, 5 * TILE, 22 * TILE, '#5577aa')
+    drawTV(ctx, 3 * TILE, 21 * TILE, frame)
+    drawVendingMachine(ctx, 10 * TILE, 21 * TILE, frame)
+    drawBeanbag(ctx, 8 * TILE, 24 * TILE, '#aa6688')
+    drawBeanbag(ctx, 9 * TILE, 23 * TILE, '#6688aa')
+    drawPlant(ctx, 11 * TILE, 24 * TILE, frame)
+    // 휴게실 작은 테이블
+    ctx.fillStyle = '#8b6e4e'
+    ctx.fillRect(7 * TILE + 4, 22 * TILE + 8, TILE - 8, TILE - 8)
+    ctx.fillStyle = '#a0825e'
+    ctx.fillRect(7 * TILE + 6, 22 * TILE + 10, TILE - 12, TILE - 12)
+    // 휴게실 러그
+    drawRug(ctx, 2 * TILE, 23 * TILE + 4, 6 * TILE, 2 * TILE - 8, '#8866bb')
 
     // 대표실 가구
     const ceoX = 24 * TILE, ceoY = 6 * TILE
@@ -851,6 +1266,57 @@ export function OfficeCanvas() {
     ctx.fillStyle = '#774433'
     ctx.fillRect(ceoX + TILE + 6, ceoY + 2 * TILE + 6, TILE - 12, TILE - 12)
 
+    // ── 자율 행동 (자리 이탈 → 돌아다니기 → 복귀)
+    const POI = [ // Points of Interest (정수기, 커피머신, 휴게실 등)
+      { x: 16, y: 7 }, { x: 11, y: 12 }, // 정수기
+      { x: 17, y: 7 },  // 커피머신
+      { x: 18, y: 17 }, { x: 19, y: 17 }, // 회의실 근처
+      { x: 3, y: 23 }, { x: 6, y: 23 }, { x: 9, y: 23 }, // 휴게실 (소파, 빈백)
+    ]
+    const MOODS: EmployeeMood[] = ['normal', 'happy', 'focused', 'tired', 'excited', 'coffee']
+    if (frame % 3 === 0) { // 매 3프레임마다 체크 (성능)
+      const idleUpdates: Record<string, Partial<EmployeeState>> = {}
+      for (const emp of allEmployees) {
+        const st = states[emp.id]
+        if (!st || st.walking) continue
+        // idle 타이머 감소
+        const newTimer = (st.idleTimer ?? 200) - 1
+        if (newTimer <= 0 && !st.returningHome && st.status !== 'work' && st.status !== 'boss') {
+          // 자리를 떠남 → POI로 이동
+          const poi = POI[Math.floor(Math.random() * POI.length)]
+          idleUpdates[emp.id] = {
+            tx: poi.x, ty: poi.y,
+            walking: true,
+            returningHome: false,
+            idleTimer: 150 + Math.floor(Math.random() * 200),
+            mood: MOODS[Math.floor(Math.random() * MOODS.length)],
+          }
+        } else if (newTimer <= 0 && st.returningHome) {
+          // POI에 도착 후 → 자리로 복귀 대기 끝
+          const empIdx = allEmployees.indexOf(emp)
+          const seat = getSeat(empIdx)
+          idleUpdates[emp.id] = {
+            tx: seat.x, ty: seat.y,
+            walking: true,
+            returningHome: false,
+            idleTimer: 400 + Math.floor(Math.random() * 800),
+            mood: Math.random() > 0.5 ? 'happy' : 'normal',
+          }
+        } else if (!st.walking && newTimer > 0) {
+          idleUpdates[emp.id] = { idleTimer: newTimer }
+        }
+      }
+      if (Object.keys(idleUpdates).length > 0) {
+        useOfficeStore.setState((s) => {
+          const next = { ...s.empStates }
+          for (const [id, upd] of Object.entries(idleUpdates)) {
+            next[id] = { ...next[id], ...upd }
+          }
+          return { empStates: next }
+        })
+      }
+    }
+
     // ── 직원 걷기 애니메이션 (x→tx, y→ty 보간)
     const WALK_SPEED = 0.15
     const stateUpdates: Record<string, Partial<EmployeeState>> = {}
@@ -861,8 +1327,17 @@ export function OfficeCanvas() {
       const dy = st.ty - st.y
       const dist = Math.sqrt(dx * dx + dy * dy)
       if (dist < 0.2) {
-        // 도착
-        stateUpdates[emp.id] = { x: st.tx, y: st.ty, walking: false }
+        // 도착 — POI에 도착하면 잠시 머물다 복귀 예정
+        const isAtHome = (() => {
+          const idx = allEmployees.indexOf(emp)
+          const seat = getSeat(idx)
+          return Math.abs(st.tx - seat.x) < 1 && Math.abs(st.ty - seat.y) < 1
+        })()
+        stateUpdates[emp.id] = {
+          x: st.tx, y: st.ty, walking: false,
+          returningHome: !isAtHome, // POI에 도착 → 복귀 대기
+          idleTimer: isAtHome ? (400 + Math.floor(Math.random() * 800)) : (60 + Math.floor(Math.random() * 120)),
+        }
       } else {
         // 이동
         stateUpdates[emp.id] = {
@@ -881,6 +1356,53 @@ export function OfficeCanvas() {
       })
     }
 
+    // ── 근처 직원 대화 감지 (매 60프레임 = 5초마다 체크)
+    if (frame % 60 === 0) {
+      for (let i = 0; i < allEmployees.length; i++) {
+        const st1 = states[allEmployees[i].id]
+        if (!st1 || st1.walking || st1.bubble) continue
+        for (let j = i + 1; j < allEmployees.length; j++) {
+          const st2 = states[allEmployees[j].id]
+          if (!st2 || st2.walking || st2.bubble) continue
+          const dx = (st1.x - st2.x)
+          const dy = (st1.y - st2.y)
+          const dist = Math.sqrt(dx * dx + dy * dy)
+          // 2타일 이내 + 둘 다 자리에 없으면 (POI 근처) 대화
+          const seat1 = getSeat(i)
+          const seat2 = getSeat(j)
+          const isAway1 = Math.abs(st1.x - seat1.x) > 1 || Math.abs(st1.y - seat1.y) > 1
+          const isAway2 = Math.abs(st2.x - seat2.x) > 1 || Math.abs(st2.y - seat2.y) > 1
+          if (dist < 2.5 && isAway1 && isAway2 && Math.random() > 0.6) {
+            const chatMsgs = ['안녕~', '오늘 바빠?', '커피 한잔?', '점심 뭐 먹지', '화이팅!', '수고해요~', '오 반가워!']
+            const msg = chatMsgs[Math.floor(Math.random() * chatMsgs.length)]
+            setEmpBubble(allEmployees[i].id, `💬 ${msg}`, 80)
+            break
+          }
+        }
+      }
+    }
+
+    // ── 커피 마시기 이펙트 (커피머신 근처에서 idle)
+    for (const emp of allEmployees) {
+      const st = states[emp.id]
+      if (!st || st.walking || st.status === 'work') continue
+      const atCoffee = Math.abs(st.x - 17) < 1.5 && Math.abs(st.y - 7) < 1.5
+      if (atCoffee && frame % 36 < 18) {
+        const cpx = st.x * TILE
+        const cpy = st.y * TILE
+        // 컵 들고 있는 모션
+        ctx.fillStyle = '#fff'
+        ctx.fillRect(cpx + 4, cpy + 14, 5, 5)
+        ctx.fillStyle = '#6b3a1a'
+        ctx.fillRect(cpx + 5, cpy + 15, 3, 3)
+        // 스팀
+        ctx.fillStyle = 'rgba(200,200,200,0.4)'
+        const steamY = Math.sin(frame * 0.3) * 2
+        ctx.fillRect(cpx + 5, cpy + 10 + steamY, 1, 3)
+        ctx.fillRect(cpx + 7, cpy + 9 + steamY, 1, 4)
+      }
+    }
+
     // ── 직원 렌더 (y좌표 순서)
     const sorted = allEmployees.map((emp, i) => ({ emp, i, st: states[emp.id] }))
       .filter(e => e.st)
@@ -892,6 +1414,13 @@ export function OfficeCanvas() {
       const py = st.y * TILE
 
       drawCharacter(ctx, px, py, emp.deptColor, st.status, frame, i, hoveredEmp === emp.id, emp.name, emp.emoji)
+
+      // 상태별 파티클 이펙트
+      if (st.status === 'work') {
+        drawTypingParticles(ctx, px, py, frame, i)
+      } else if (st.status === 'done') {
+        drawDoneSparkle(ctx, px, py, frame, i)
+      }
 
       // 말풍선
       if (st.bubble && st.bubbleTimer > 0) {
@@ -921,49 +1450,91 @@ export function OfficeCanvas() {
       }
     }
 
-    // ── 선택된 직원 상세 패널
+    // 앰비언트 파티클 (최상단 레이어)
+    drawAmbientParticles(ctx, frame, CANVAS_H)
+
+    // ── 선택된 직원 상세 패널 (향상)
     if (selectedEmp) {
       const emp = allEmployees.find(e => e.id === selectedEmp)
       const st = states[selectedEmp] ?? { status: 'idle' as const }
       if (emp) {
         const hasRepos = emp.repos && emp.repos.length > 0
-        const panelW = 200
-        const panelH = hasRepos ? 80 : 64
+        const panelW = 220
+        const panelH = hasRepos ? 100 : 82
         const panelX = CANVAS_W - panelW - 10
         const panelY = CANVAS_H - panelH - 10
 
-        ctx.fillStyle = 'rgba(255,255,255,0.95)'
+        // 그림자
+        ctx.shadowColor = 'rgba(0,0,0,0.2)'
+        ctx.shadowBlur = 12
+        ctx.shadowOffsetY = 4
+        ctx.fillStyle = 'rgba(255,255,255,0.97)'
+        ctx.beginPath()
+        ctx.roundRect(panelX, panelY, panelW, panelH, 10)
+        ctx.fill()
+        ctx.shadowBlur = 0
+        ctx.shadowOffsetY = 0
+
+        // 테두리
         ctx.strokeStyle = emp.deptColor
         ctx.lineWidth = 2
         ctx.beginPath()
-        ctx.roundRect(panelX, panelY, panelW, panelH, 8)
-        ctx.fill()
+        ctx.roundRect(panelX, panelY, panelW, panelH, 10)
         ctx.stroke()
-        // 상단 색상 바
+
+        // 상단 색상 그라데이션 바
         ctx.fillStyle = emp.deptColor
-        ctx.fillRect(panelX + 2, panelY + 2, panelW - 4, 3)
+        ctx.beginPath()
+        ctx.roundRect(panelX + 2, panelY + 2, panelW - 4, 4, [8, 8, 0, 0])
+        ctx.fill()
+        ctx.globalAlpha = 0.3
+        ctx.fillStyle = emp.deptColor
+        ctx.fillRect(panelX + 2, panelY + 6, panelW - 4, 8)
+        ctx.globalAlpha = 1
 
-        ctx.fillStyle = '#333'
-        ctx.font = 'bold 12px "Pretendard", sans-serif'
-        ctx.fillText(`${emp.emoji} ${emp.name}`, panelX + 10, panelY + 20)
+        // 아바타 원
+        const avatarX = panelX + 22
+        const avatarY = panelY + 26
+        ctx.fillStyle = emp.deptColor
+        ctx.beginPath()
+        ctx.arc(avatarX, avatarY, 12, 0, Math.PI * 2)
+        ctx.fill()
+        ctx.fillStyle = '#fff'
+        ctx.font = 'bold 11px "Pretendard", sans-serif'
+        ctx.textAlign = 'center'
+        ctx.fillText(emp.emoji, avatarX, avatarY + 4)
+        ctx.textAlign = 'left'
 
-        ctx.fillStyle = '#666'
+        // 이름 + 부서
+        ctx.fillStyle = '#222'
+        ctx.font = 'bold 13px "Pretendard", sans-serif'
+        ctx.fillText(emp.name, panelX + 40, panelY + 24)
+
+        ctx.fillStyle = '#777'
         ctx.font = '10px "Pretendard", sans-serif'
-        ctx.fillText(`${emp.dept} · ${emp.role} · ${emp.code}`, panelX + 10, panelY + 36)
+        ctx.fillText(`${emp.dept} · ${emp.role}`, panelX + 40, panelY + 38)
 
+        // 상태 뱃지
         const sc = STATUS_COLORS[st.status]
+        const statusLabel = sc?.label ?? st.status
+        ctx.font = 'bold 9px "Pretendard", sans-serif'
+        const statusW = ctx.measureText(`● ${statusLabel}`).width + 12
+        ctx.fillStyle = (sc?.text ?? '#6b8cbb') + '20'
+        ctx.beginPath()
+        ctx.roundRect(panelX + 10, panelY + 48, statusW, 16, 8)
+        ctx.fill()
         ctx.fillStyle = sc?.text ?? '#6b8cbb'
-        ctx.font = 'bold 10px "Pretendard", sans-serif'
-        ctx.fillText(`● ${sc?.label ?? st.status}`, panelX + 10, panelY + 52)
+        ctx.fillText(`● ${statusLabel}`, panelX + 16, panelY + 59)
 
-        ctx.fillStyle = '#888'
+        // 한마디
+        ctx.fillStyle = '#999'
         ctx.font = '9px "Pretendard", sans-serif'
-        ctx.fillText(emp.speech.slice(0, 24), panelX + 56, panelY + 52)
+        ctx.fillText(`"${emp.speech.slice(0, 22)}"`, panelX + 10, panelY + 74)
 
         if (hasRepos) {
           ctx.fillStyle = '#3366aa'
           ctx.font = 'bold 9px "Pretendard", sans-serif'
-          ctx.fillText(`📦 ${emp.repos!.join(' · ')}`, panelX + 10, panelY + 68)
+          ctx.fillText(`📦 ${emp.repos!.join(' · ')}`, panelX + 10, panelY + 90)
         }
       }
     }
@@ -1077,11 +1648,12 @@ export function OfficeCanvas() {
         }}
       />
 
-      <div className="flex items-center gap-4 text-[10px] text-[#6b8cbb]">
-        <span>👥 {allEmployees.length}명</span>
-        <span>🏢 {COLS}×{ROWS}</span>
+      <div className="flex items-center gap-3 text-[10px] text-[#6b8cbb] bg-[#0a0e1a]/60 px-3 py-1.5 rounded-full border border-[#1e3a5f]/50">
+        <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-[#4af] animate-pulse" />👥 {allEmployees.length}명</span>
+        <span className="text-[#1e3a5f]">│</span>
         <span>🖱️ 클릭=정보 · 더블클릭=대화</span>
-        <span>🎮 {FPS}fps</span>
+        <span className="text-[#1e3a5f]">│</span>
+        <span className="text-[#4a6a8a]">🎮 {FPS}fps · {COLS}×{ROWS}</span>
       </div>
     </div>
   )

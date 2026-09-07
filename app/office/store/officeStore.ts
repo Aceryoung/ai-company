@@ -20,8 +20,11 @@ export interface Employee {
   forceModel?: 'claude' // 이 직원은 항상 Claude 사용 (Gemini 폴백 안 함)
 }
 
+export type EmployeeMood = 'normal' | 'happy' | 'focused' | 'tired' | 'excited' | 'coffee'
+
 export interface EmployeeState {
   status: EmployeeStatus
+  mood: EmployeeMood
   bubble: string
   bubbleTimer: number
   x: number
@@ -29,6 +32,8 @@ export interface EmployeeState {
   tx: number
   ty: number
   walking: boolean
+  idleTimer: number    // 자율 행동까지 남은 프레임
+  returningHome: boolean  // 집으로 돌아가는 중
 }
 
 export interface ChatMessage {
