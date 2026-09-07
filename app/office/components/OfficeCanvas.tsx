@@ -1542,19 +1542,25 @@ export function OfficeCanvas() {
     tickEmpBubbles()
   }, [hoveredEmp, selectedEmp, tickEmpBubbles, ROWS, CANVAS_W, CANVAS_H, allEmployees, getSeat, dynamicZones])
 
-  // 애니메이션 루프
+  // draw를 ref로 안정화 — 루프가 dependency 변경으로 끊기지 않도록
+  const drawRef = useRef(draw)
+  useEffect(() => { drawRef.current = draw }, [draw])
+
+  // 애니메이션 루프 (한 번만 시작, 절대 재시작 안 함)
   useEffect(() => {
     let lastTime = 0
     const interval = 1000 / FPS
+    let running = true
     const loop = (time: number) => {
+      if (!running) return
       animRef.current = requestAnimationFrame(loop)
       if (time - lastTime < interval) return
       lastTime = time
-      draw()
+      drawRef.current()
     }
     animRef.current = requestAnimationFrame(loop)
-    return () => cancelAnimationFrame(animRef.current)
-  }, [draw])
+    return () => { running = false; cancelAnimationFrame(animRef.current) }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // 마우스 → 직원 감지
   const tileFromEvent = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
