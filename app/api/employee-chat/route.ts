@@ -191,6 +191,95 @@ async function getGitHubSummary(): Promise<string> {
   return `이번 주 GitHub 현황 (${since}~):\n${lines.join('\n')}`
 }
 
+// ── Notion API 연동
+const NOTION_QUICKBIZLAB_PAGE_ID = '2bc67a0561d581f784a1db047bf29080'
+const NOTION_REPORT_PAGE_ID = '3d467a0561d581a79a6dde2d7924ce24'
+
+async function notionSearch(query: string, pageSize = 5): Promise<Array<{ id: string; title: string; url: string; lastEdited: string }>> {
+  const notionKey = process.env.NOTION_API_KEY
+  if (!notionKey) return []
+
+  try {
+    const res = await fetch('https://api.notion.com/v1/search', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${notionKey}`,
+        'Notion-Version': '2022-06-28',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ query, page_size: pageSize }),
+      signal: AbortSignal.timeout(10_000),
+    })
+    const data = await res.json() as { results?: Array<Record<string, unknown>> }
+    if (!data.results) return []
+
+    return data.results.map(r => {
+      const props = r.properties as Record<string, Record<string, unknown>> | undefined
+      let title = '(제목 없음)'
+      if (props?.title) {
+        const titleArr = (props.title as Record<string, unknown>).title as Array<{ text?: { content?: string } }> | undefined
+        if (titleArr?.[0]?.text?.content) title = titleArr[0].text.content
+      } else if (props?.Name) {
+        const nameArr = (props.Name as Record<string, unknown>).title as Array<{ text?: { content?: string } }> | undefined
+        if (nameArr?.[0]?.text?.content) title = nameArr[0].text.content
+      }
+      // child_page type
+      if (r.type === 'child_page') {
+        title = (r.child_page as Record<string, string>)?.title || title
+      }
+      return {
+        id: r.id as string,
+        title,
+        url: r.url as string || '',
+        lastEdited: (r.last_edited_time as string || '').slice(0, 10),
+      }
+    })
+  } catch { return [] }
+}
+
+async function notionCreatePage(parentId: string, title: string, content: string, icon?: string): Promise<{ id: string; url: string } | null> {
+  const notionKey = process.env.NOTION_API_KEY
+  if (!notionKey) return null
+
+  try {
+    const blocks = content.split('\n').filter(l => l.trim()).map(line => {
+      if (line.startsWith('# ')) return { object: 'block', type: 'heading_1', heading_1: { rich_text: [{ type: 'text', text: { content: line.slice(2) } }] } }
+      if (line.startsWith('## ')) return { object: 'block', type: 'heading_2', heading_2: { rich_text: [{ type: 'text', text: { content: line.slice(3) } }] } }
+      if (line.startsWith('### ')) return { object: 'block', type: 'heading_3', heading_3: { rich_text: [{ type: 'text', text: { content: line.slice(4) } }] } }
+      if (line.startsWith('- ')) return { object: 'block', type: 'bulleted_list_item', bulleted_list_item: { rich_text: [{ type: 'text', text: { content: line.slice(2) } }] } }
+      return { object: 'block', type: 'paragraph', paragraph: { rich_text: [{ type: 'text', text: { content: line } }] } }
+    })
+
+    const body: Record<string, unknown> = {
+      parent: { page_id: parentId },
+      properties: { title: [{ text: { content: title } }] },
+      children: blocks.slice(0, 100),
+    }
+    if (icon) body.icon = { type: 'emoji', emoji: icon }
+
+    const res = await fetch('https://api.notion.com/v1/pages', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${notionKey}`,
+        'Notion-Version': '2022-06-28',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(15_000),
+    })
+    const data = await res.json() as { id?: string; url?: string; status?: number }
+    if (!data.id) return null
+    return { id: data.id, url: data.url || '' }
+  } catch { return null }
+}
+
+async function getNotionContext(query: string): Promise<string> {
+  const results = await notionSearch(query)
+  if (results.length === 0) return `[노션 검색: "${query}"] 관련 문서 없음`
+  const lines = results.map((r, i) => `  ${i + 1}. ${r.title} (${r.lastEdited})`)
+  return `[노션 검색: "${query}"] ${results.length}건 발견:\n${lines.join('\n')}`
+}
+
 // ── 부서별 컨텍스트 데이터 수집
 async function getContextData(dept: string, message: string): Promise<string> {
   const lower = message.toLowerCase()
@@ -223,6 +312,30 @@ async function getContextData(dept: string, message: string): Promise<string> {
     if (lower.includes('현황') || lower.includes('빌드') || lower.includes('상태') || lower.includes('진행')) {
       return '\n\n■ 조회한 실제 데이터:\n' + await getGitHubSummary()
     }
+  }
+
+  // 영업: 견적서, 제안서, 계약 관련 → Notion 검색
+  if (dept === '영업') {
+    if (lower.includes('견적') || lower.includes('제안서') || lower.includes('계약') || lower.includes('클라이언트') || lower.includes('고객')) {
+      const query = lower.includes('견적') ? '견적서' : lower.includes('제안서') ? '제안서' : lower.includes('계약') ? '계약' : '영업'
+      return '\n\n■ 조회한 실제 데이터 (노션):\n' + await getNotionContext(query)
+    }
+  }
+
+  // 기획: 기획 문서, PRD 검색
+  if (dept === '기획') {
+    if (lower.includes('문서') || lower.includes('prd') || lower.includes('스펙') || lower.includes('기획서')) {
+      const query = lower.includes('prd') ? 'PRD' : lower.includes('스펙') ? '스펙' : '기획'
+      return '\n\n■ 조회한 실제 데이터 (노션):\n' + await getNotionContext(query)
+    }
+  }
+
+  // 모든 부서: 노션/문서 직접 언급 시 검색
+  if (lower.includes('노션') || lower.includes('notion')) {
+    // 메시지에서 검색 키워드 추출
+    const cleaned = message.replace(/노션|notion|에서|에|찾아|검색|보여|확인/gi, '').trim()
+    const query = cleaned.length >= 2 ? cleaned.slice(0, 20) : dept
+    return '\n\n■ 조회한 실제 데이터 (노션):\n' + await getNotionContext(query)
   }
 
   return ''
@@ -513,6 +626,19 @@ ${conversationContext ? `이전 대화 맥락:\n${conversationContext}\n` : ''}
     })
     const data = await res.json() as Array<{ id: string }>
     if (!res.ok || !data[0]?.id) return null
+
+    // Notion에도 자동 생성
+    const DEPT_EMOJI: Record<string, string> = {
+      채용: '👥', 회고: '📖', 고객소통: '💬', 시장조사: '🔍', 경영: '📊',
+      마케팅: '📡', 기획: '📝', 개발: '⚙️', 배포: '🚀', 검수: '🛡️',
+      정산: '💰', 운영: '🖥️', 비서: '📅', 레포: '🔗', 영업: '💼',
+    }
+    await notionCreatePage(
+      NOTION_REPORT_PAGE_ID,
+      title,
+      reportContent,
+      DEPT_EMOJI[dept] || '📄'
+    ).catch(() => null)
 
     return { id: data[0].id, title }
   } catch { return null }
@@ -844,7 +970,8 @@ ${contextData}${summaryText}
 8. 순수 대사만 출력합니다. 괄호 설명, 주석, 메타 정보 없이.
 9. "저는 AI입니다" 같은 말 절대 금지.
 10. **즉시 보고 원칙**: 미래 약속 금지. 지금 바로 구체적 결과를 보고하세요.
-${role === '레드팀' ? `11. [레드팀] 문제점, 리스크를 먼저 지적하고 개선 방안 제시.` : ''}
+11. **정직 원칙**: "조회한 실제 데이터"에 없는 내용을 있다고 말하지 마세요. 문서가 없으면 "현재 관련 문서가 없습니다"라고 솔직히 답하세요. 가짜 문서명, 가짜 금액, 가짜 결과를 만들어내지 마세요.
+${role === '레드팀' ? `12. [레드팀] 문제점, 리스크를 먼저 지적하고 개선 방안 제시.` : ''}
 ${historyText}
 
 대표님: ${message}
