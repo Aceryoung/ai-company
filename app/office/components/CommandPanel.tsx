@@ -459,7 +459,7 @@ export function CommandPanel({ isMobile, onSwitchToOffice }: Props) {
             previousSummary: (prevResult ? `이전 작업 결과:\n${prevResult}` : '') + memoryContext,
           }),
         })
-        const data = await res.json() as { progress: string; result: string; model?: string }
+        const data = await res.json() as { progress: string; result: string; model?: string; notionSaved?: { title: string; url: string; type: string } | null }
 
         if (data.model === 'gemini') {
           addLog('sys', '🟡 Gemini Flash 사용')
@@ -468,6 +468,12 @@ export function CommandPanel({ isMobile, onSwitchToOffice }: Props) {
         // 결과 표시
         await new Promise(r => setTimeout(r, 300))
         addLog('employee', `[${emp.dept}] ${emp.emoji || '👤'} ${emp.name}(${emp.role}): ${data.result}`)
+
+        // Notion 저장 알림
+        if (data.notionSaved) {
+          const ns = data.notionSaved
+          addLog('sys', `📎 ${ns.type} "${ns.title}" → Notion에 실제 저장 완료!`)
+        }
 
         // 상태 업데이트
         setEmpStatus(emp.id, 'done', '✅ 완료!')
@@ -567,9 +573,12 @@ export function CommandPanel({ isMobile, onSwitchToOffice }: Props) {
             previousSummary: chainResult ? `이전 단계 결과:\n${chainResult}` : '',
           }),
         })
-        const data = await res.json() as { progress: string; result: string; model?: string }
+        const data = await res.json() as { progress: string; result: string; model?: string; notionSaved?: { title: string; url: string; type: string } | null }
 
         addLog('employee', `  [${emp.dept}] ${emp.emoji || '👤'} ${emp.name}(${emp.role}): ${data.result}`)
+        if (data.notionSaved) {
+          addLog('sys', `  📎 ${data.notionSaved.type} "${data.notionSaved.title}" → Notion에 실제 저장 완료!`)
+        }
         setEmpStatus(emp.id, 'done', '✅ 완료!')
         setEmpBubble(emp.id, '✅ 완료!', 180)
         updateTaskStep(taskId, emp.id, {

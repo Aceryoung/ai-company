@@ -952,7 +952,33 @@ ${role === '레드팀' ? '7. [레드팀] 리스크/문제점 지적 + 개선안'
     const lines = reply.split('\n').filter(l => l.trim())
     const progressLine = lines.find(l => l.includes('[진행]'))?.replace('[진행]', '').trim() || lines[0]?.trim() || '작업 시작합니다!'
     const resultLine = lines.filter(l => !l.includes('[진행]')).join('\n').trim() || reply.trim()
-    return NextResponse.json({ progress: progressLine, result: resultLine, model })
+
+    // 자율 업무 결과물을 Notion에 실제 저장
+    let notionSaved: { title: string; url: string; type: string } | null = null
+    const taskLower = taskDesc.toLowerCase()
+    if (shouldGenerateQuote(taskDesc)) {
+      // 견적서 생성 → Notion 저장
+      const quoteResult = await generateAndSaveQuote(name, dept, role, taskDesc, context)
+      if (quoteResult) notionSaved = { ...quoteResult, type: '견적서' }
+    } else if (REPORT_KEYWORDS.some(k => taskLower.includes(k))) {
+      // 보고서 → Notion 저장
+      const titleMatch = reply.match(/^#\s+(.+)/m)
+      const title = titleMatch ? titleMatch[1].trim() : `${dept} 업무 보고서`
+      const DEPT_EMOJI: Record<string, string> = {
+        채용: '👥', 회고: '📖', 고객소통: '💬', 시장조사: '🔍', 경영: '📊',
+        마케팅: '📡', 기획: '📝', 개발: '⚙️', 배포: '🚀', 검수: '🛡️',
+        정산: '💰', 운영: '🖥️', 비서: '📅', 레포: '🔗', 영업: '💼',
+      }
+      const notionResult = await notionCreatePage(NOTION_REPORT_PAGE_ID, title, reply, DEPT_EMOJI[dept] || '📄')
+      if (notionResult) notionSaved = { title, url: notionResult.url, type: '보고서' }
+    } else if (taskLower.includes('노션') && (taskLower.includes('업로드') || taskLower.includes('작성') || taskLower.includes('만들') || taskLower.includes('생성'))) {
+      // 일반 노션 업로드 요청 → 결과를 Notion에 저장
+      const title = `${dept} - ${taskDesc.slice(0, 30)}`
+      const notionResult = await notionCreatePage(NOTION_QUICKBIZLAB_PAGE_ID, title, reply, '📋')
+      if (notionResult) notionSaved = { title, url: notionResult.url, type: '문서' }
+    }
+
+    return NextResponse.json({ progress: progressLine, result: resultLine, model, notionSaved })
   }
 
   // 학습 추출
