@@ -191,9 +191,51 @@ async function getGitHubSummary(): Promise<string> {
   return `이번 주 GitHub 현황 (${since}~):\n${lines.join('\n')}`
 }
 
+// ── Vercel 배포 현황 (운영팀용)
+async function getVercelDeployments(): Promise<string> {
+  const vercelToken = process.env.VERCEL_TOKEN
+  if (!vercelToken) return '[Vercel 미연결] VERCEL_TOKEN 없음'
+
+  try {
+    const res = await fetch(
+      'https://api.vercel.com/v6/deployments?limit=5&projectId=prj_quickbizlab&state=READY,ERROR,BUILDING',
+      {
+        headers: { Authorization: `Bearer ${vercelToken}` },
+        signal: AbortSignal.timeout(10_000),
+      }
+    )
+    if (!res.ok) {
+      // projectId 없이 재시도
+      const res2 = await fetch('https://api.vercel.com/v6/deployments?limit=5', {
+        headers: { Authorization: `Bearer ${vercelToken}` },
+        signal: AbortSignal.timeout(10_000),
+      })
+      const data = await res2.json() as { deployments?: Array<Record<string, unknown>> }
+      if (!data.deployments?.length) return 'Vercel 배포 기록 없음'
+      return formatVercelDeployments(data.deployments)
+    }
+    const data = await res.json() as { deployments?: Array<Record<string, unknown>> }
+    if (!data.deployments?.length) return 'Vercel 배포 기록 없음'
+    return formatVercelDeployments(data.deployments)
+  } catch { return '[Vercel 조회 실패]' }
+}
+
+function formatVercelDeployments(deployments: Array<Record<string, unknown>>): string {
+  const stateEmoji: Record<string, string> = { READY: '✅', ERROR: '❌', BUILDING: '🔄', CANCELED: '⛔' }
+  const lines = deployments.slice(0, 5).map(d => {
+    const state = d.state as string || 'UNKNOWN'
+    const emoji = stateEmoji[state] || '❓'
+    const created = new Date(d.created as number || 0).toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' })
+    const url = (d.url as string || '').slice(0, 40)
+    return `  ${emoji} ${state} | ${created} | ${url}`
+  })
+  return `Vercel 최근 배포 ${deployments.length}건:\n${lines.join('\n')}`
+}
+
 // ── Notion API 연동
 const NOTION_QUICKBIZLAB_PAGE_ID = '2bc67a0561d581f784a1db047bf29080'
 const NOTION_REPORT_PAGE_ID = '3d467a0561d581a79a6dde2d7924ce24'
+const NOTION_QUOTE_PAGE_ID = '3d567a0561d58187a64cccb9bbf7bbe1'
 
 async function notionSearch(query: string, pageSize = 5): Promise<Array<{ id: string; title: string; url: string; lastEdited: string }>> {
   const notionKey = process.env.NOTION_API_KEY
@@ -314,7 +356,7 @@ async function getContextData(dept: string, message: string): Promise<string> {
     }
   }
 
-  // 영업: 견적서, 제안서, 계약 관련 → Notion 검색
+  // 영업: 견적서, 제안서, 계약, 고객 관련 → Notion 검색
   if (dept === '영업') {
     if (lower.includes('견적') || lower.includes('제안서') || lower.includes('계약') || lower.includes('클라이언트') || lower.includes('고객')) {
       const query = lower.includes('견적') ? '견적서' : lower.includes('제안서') ? '제안서' : lower.includes('계약') ? '계약' : '영업'
@@ -322,17 +364,76 @@ async function getContextData(dept: string, message: string): Promise<string> {
     }
   }
 
-  // 기획: 기획 문서, PRD 검색
+  // 기획: 기획 문서, PRD, 스펙
   if (dept === '기획') {
-    if (lower.includes('문서') || lower.includes('prd') || lower.includes('스펙') || lower.includes('기획서')) {
-      const query = lower.includes('prd') ? 'PRD' : lower.includes('스펙') ? '스펙' : '기획'
+    if (lower.includes('문서') || lower.includes('prd') || lower.includes('스펙') || lower.includes('기획서') || lower.includes('로드맵')) {
+      const query = lower.includes('prd') ? 'PRD' : lower.includes('스펙') ? '스펙' : lower.includes('로드맵') ? '로드맵' : '기획'
       return '\n\n■ 조회한 실제 데이터 (노션):\n' + await getNotionContext(query)
+    }
+  }
+
+  // 마케팅: 캠페인, 콘텐츠, 브랜드 전략
+  if (dept === '마케팅') {
+    if (lower.includes('캠페인') || lower.includes('콘텐츠') || lower.includes('브랜드') || lower.includes('sns') || lower.includes('광고') || lower.includes('전략') || lower.includes('현황')) {
+      const query = lower.includes('캠페인') ? '캠페인' : lower.includes('콘텐츠') ? '콘텐츠' : lower.includes('sns') ? 'SNS' : lower.includes('광고') ? '광고' : '마케팅'
+      return '\n\n■ 조회한 실제 데이터 (노션):\n' + await getNotionContext(query)
+    }
+  }
+
+  // 시장조사: 리서치, 트렌드, 경쟁사 분석
+  if (dept === '시장조사') {
+    if (lower.includes('리서치') || lower.includes('트렌드') || lower.includes('경쟁') || lower.includes('분석') || lower.includes('시장') || lower.includes('현황')) {
+      const query = lower.includes('경쟁') ? '경쟁사' : lower.includes('트렌드') ? '트렌드' : lower.includes('리서치') ? '리서치' : '시장조사'
+      return '\n\n■ 조회한 실제 데이터 (노션):\n' + await getNotionContext(query)
+    }
+  }
+
+  // 고객소통: 피드백, 문의, CS
+  if (dept === '고객소통') {
+    if (lower.includes('피드백') || lower.includes('문의') || lower.includes('고객') || lower.includes('응대') || lower.includes('현황') || lower.includes('이슈')) {
+      const query = lower.includes('피드백') ? '피드백' : lower.includes('문의') ? '문의' : lower.includes('이슈') ? '이슈' : '고객'
+      return '\n\n■ 조회한 실제 데이터 (노션):\n' + await getNotionContext(query)
+    }
+  }
+
+  // 경영: 전략, KPI, 보고서 종합
+  if (dept === '경영') {
+    if (lower.includes('전략') || lower.includes('kpi') || lower.includes('보고') || lower.includes('현황') || lower.includes('종합') || lower.includes('실적')) {
+      const query = lower.includes('전략') ? '전략' : lower.includes('kpi') ? 'KPI' : lower.includes('실적') ? '실적' : '보고서'
+      return '\n\n■ 조회한 실제 데이터 (노션):\n' + await getNotionContext(query)
+    }
+  }
+
+  // 채용: 조직, 인력, 부서 구조
+  if (dept === '채용') {
+    if (lower.includes('조직') || lower.includes('인력') || lower.includes('부서') || lower.includes('채용') || lower.includes('현황') || lower.includes('구조')) {
+      const query = lower.includes('조직') ? '조직' : lower.includes('인력') ? '인력' : lower.includes('채용') ? '채용' : '부서'
+      return '\n\n■ 조회한 실제 데이터 (노션):\n' + await getNotionContext(query)
+    }
+  }
+
+  // 회고: 회고록, 스프린트, KPT
+  if (dept === '회고') {
+    if (lower.includes('회고') || lower.includes('스프린트') || lower.includes('kpt') || lower.includes('개선') || lower.includes('현황') || lower.includes('리뷰')) {
+      const query = lower.includes('스프린트') ? '스프린트' : lower.includes('kpt') ? 'KPT' : '회고'
+      return '\n\n■ 조회한 실제 데이터 (노션):\n' + await getNotionContext(query)
+    }
+  }
+
+  // 운영: 서버 상태 + Vercel 배포 현황
+  if (dept === '운영') {
+    if (lower.includes('배포') || lower.includes('서버') || lower.includes('상태') || lower.includes('장애') || lower.includes('현황') || lower.includes('에러')) {
+      let context = ''
+      // GitHub 최근 활동
+      context += await getGitHubSummary()
+      // Vercel 배포 상태
+      context += '\n' + await getVercelDeployments()
+      return '\n\n■ 조회한 실제 데이터:\n' + context
     }
   }
 
   // 모든 부서: 노션/문서 직접 언급 시 검색
   if (lower.includes('노션') || lower.includes('notion')) {
-    // 메시지에서 검색 키워드 추출
     const cleaned = message.replace(/노션|notion|에서|에|찾아|검색|보여|확인/gi, '').trim()
     const query = cleaned.length >= 2 ? cleaned.slice(0, 20) : dept
     return '\n\n■ 조회한 실제 데이터 (노션):\n' + await getNotionContext(query)
@@ -642,6 +743,70 @@ ${conversationContext ? `이전 대화 맥락:\n${conversationContext}\n` : ''}
 
     return { id: data[0].id, title }
   } catch { return null }
+}
+
+// ── 견적서 감지 & 생성
+const QUOTE_KEYWORDS = ['견적서', '견적', '제안서', 'quote', 'proposal']
+const QUOTE_CREATE_KEYWORDS = ['만들', '작성', '생성', '준비', '보내']
+
+function shouldGenerateQuote(userMsg: string): boolean {
+  const lower = userMsg.toLowerCase()
+  const hasQuoteWord = QUOTE_KEYWORDS.some(k => lower.includes(k))
+  const hasCreateWord = QUOTE_CREATE_KEYWORDS.some(k => lower.includes(k))
+  return hasQuoteWord && hasCreateWord
+}
+
+async function generateAndSaveQuote(
+  employeeName: string, dept: string, role: string,
+  userMessage: string, conversationContext: string
+): Promise<{ title: string; url: string } | null> {
+  const quotePrompt = `당신은 AI 회사 "QuickBizLab"의 ${dept} 부서 ${role} "${employeeName}"입니다.
+대표님(꽁꽁)이 다음과 같이 요청했습니다:
+"${userMessage}"
+
+${conversationContext ? `이전 대화 맥락:\n${conversationContext}\n` : ''}
+
+위 요청에 대한 **전문적인 견적서**를 Markdown 형식으로 작성하세요.
+
+견적서 형식:
+# [견적서 제목]
+**작성자:** ${employeeName} (${dept} ${role})
+**작성일:** ${new Date().toLocaleDateString('ko-KR')}
+**유효기간:** 발행일로부터 30일
+
+## 1. 프로젝트 개요
+(고객명, 프로젝트명, 요구사항 요약)
+
+## 2. 서비스 항목 및 비용
+| 항목 | 설명 | 단가 | 수량 | 금액 |
+|------|------|------|------|------|
+(구체적 항목)
+
+## 3. 총 비용
+- 소계:
+- 부가세(10%):
+- **합계:**
+
+## 4. 납품 일정
+## 5. 결제 조건
+## 6. 특이사항
+
+규칙:
+- 한국어, 전문적 톤, 구체적 수치 포함
+- 대화 맥락에서 고객명/프로젝트명 추출, 없으면 합리적으로 추정
+- 금액은 현실적인 IT 서비스 시세 반영
+- 500~800자`
+
+  const { reply: quoteContent, model } = await aiChat(quotePrompt, 45, undefined, undefined, 4000)
+  if (model === 'fallback' || !quoteContent) return null
+
+  const titleMatch = quoteContent.match(/^#\s+(.+)/m)
+  const title = titleMatch ? titleMatch[1].trim() : `견적서 - ${new Date().toLocaleDateString('ko-KR')}`
+
+  const result = await notionCreatePage(NOTION_QUOTE_PAGE_ID, title, quoteContent, '💼')
+  if (!result) return null
+
+  return { title, url: result.url }
 }
 
 export async function POST(req: NextRequest) {
@@ -994,7 +1159,16 @@ ${employeeName}:`
     report = await generateAndSaveReport(body.employeeId, employeeName, dept, role, message, contextLines)
   }
 
-  return NextResponse.json({ reply, model, report })
+  // 견적서 생성 감지
+  let quote: { title: string; url: string } | null = null
+  if (shouldGenerateQuote(message)) {
+    const contextLines = (history ?? []).slice(-4).map(m =>
+      m.role === 'user' ? `대표님: ${m.content}` : `${employeeName}: ${m.content}`
+    ).join('\n')
+    quote = await generateAndSaveQuote(employeeName, dept, role, message, contextLines)
+  }
+
+  return NextResponse.json({ reply, model, report, quote })
 }
 
 function getRuleBasedReply(name: string, dept: string, role: string, speech: string, message: string): string {

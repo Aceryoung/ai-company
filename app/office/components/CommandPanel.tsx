@@ -184,6 +184,7 @@ export function CommandPanel({ isMobile, onSwitchToOffice }: Props) {
       const data = await res.json() as {
         reply: string; model?: string
         report?: { id: string; title: string } | null
+        quote?: { title: string; url: string } | null
       }
       const reply = data.reply
 
@@ -194,6 +195,12 @@ export function CommandPanel({ isMobile, onSwitchToOffice }: Props) {
       if (data.report) {
         const rpt = data.report
         addLog('sys', `📄 보고서 "${rpt.title}" 작성 완료! [REPORT:${rpt.id}]`)
+      }
+
+      // 견적서 생성 알림
+      if (data.quote) {
+        const q = data.quote
+        addLog('sys', `💼 견적서 "${q.title}" 작성 완료! → Notion에 저장됨`)
       }
     } catch {
       addLog('sys', '⚠️ 응답을 받지 못했습니다.')
@@ -989,8 +996,10 @@ export function CommandPanel({ isMobile, onSwitchToOffice }: Props) {
               history: [],
             }),
           })
-          const data = await res.json() as { reply: string; model?: string }
+          const data = await res.json() as { reply: string; model?: string; report?: { id: string; title: string } | null; quote?: { title: string; url: string } | null }
           addLog('employee', `[${detectedDept}] ${leader.name}: ${data.reply}`)
+          if (data.report) addLog('sys', `📄 보고서 "${data.report.title}" 작성 완료! [REPORT:${data.report.id}]`)
+          if (data.quote) addLog('sys', `💼 견적서 "${data.quote.title}" 작성 완료! → Notion에 저장됨`)
         } catch {
           addLog('employee', `[${detectedDept}] ${leader.name}: 네 대표님, 확인해보겠습니다! 💪`)
         } finally {
