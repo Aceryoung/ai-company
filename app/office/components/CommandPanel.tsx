@@ -962,16 +962,39 @@ export function CommandPanel({ isMobile, onSwitchToOffice }: Props) {
       return
     }
 
-    // 부서 감지 → 스킬 자동 표시 (단순 부서 언급일 때만)
+    // 부서 감지 → 스킬 표시 후 AI 대화로 전달 (질문이면 AI가 답변)
     const detectedDept = detectDept(cmd)
     if (detectedDept) {
       const skills = DEPT_SKILLS[detectedDept]
-      const leader = EMPLOYEES.find(e => e.dept === detectedDept && (e.role === '팀장' || e.role === '수석비서'))
       if (skills && skills.length > 0) {
         const skillList = skills.map(s => `${s.icon} ${s.label}`).join(' · ')
         addLog('sys', `🔧 [${detectedDept}] 활성 스킬: ${skillList}`)
-        if (leader) {
-          addLog('employee', `[${detectedDept}] ${leader.name}: 스킬 준비 완료! 작업 시작합니다.`)
+      }
+      // 해당 부서 팀장에게 AI 대화 전달
+      const allEmps = [...EMPLOYEES, ...useOfficeStore.getState().dynamicEmployees]
+      const leader = allEmps.find(e => e.dept === detectedDept && (e.role === '팀장' || e.role === '수석비서' || e.role === '이사'))
+      if (leader) {
+        setIsLoading(true)
+        try {
+          const res = await fetch('/api/employee-chat', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              employeeId: leader.id,
+              employeeName: leader.name,
+              dept: leader.dept,
+              role: leader.role,
+              speech: leader.speech,
+              message: cmd,
+              history: [],
+            }),
+          })
+          const data = await res.json() as { reply: string; model?: string }
+          addLog('employee', `[${detectedDept}] ${leader.name}: ${data.reply}`)
+        } catch {
+          addLog('employee', `[${detectedDept}] ${leader.name}: 네 대표님, 확인해보겠습니다! 💪`)
+        } finally {
+          setIsLoading(false)
         }
         return
       }
