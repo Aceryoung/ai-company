@@ -893,13 +893,12 @@ ${prevContext}
     }
     const replies = reply.split('\n').filter(line => line.trim().startsWith('['))
 
-    // 회의에서 보고서/업로드 관련 지시 감지 → 실제 Notion 저장
+    // 회의에서 보고서/업로드 관련 지시 감지 → 각 부서 상세 보고서 AI 생성 + Notion 저장
     const agendaLower = agenda.toLowerCase()
-    const needsUpload = (agendaLower.includes('업로드') || agendaLower.includes('작성') || agendaLower.includes('보고서') || agendaLower.includes('노션'))
-      && (agendaLower.includes('업로드') || agendaLower.includes('올려') || agendaLower.includes('저장') || agendaLower.includes('작성'))
+    const needsUpload = (agendaLower.includes('업로드') || agendaLower.includes('보고서') || agendaLower.includes('노션') || agendaLower.includes('올려') || agendaLower.includes('저장'))
+      && (agendaLower.includes('업로드') || agendaLower.includes('올려') || agendaLower.includes('저장') || agendaLower.includes('작성') || agendaLower.includes('보고서'))
     let notionResults: Array<{ dept: string; title: string; url: string }> = []
     if (needsUpload) {
-      // 발언한 팀장들의 보고서를 Notion에 실제 저장
       const speakingDepts = replies
         .map(r => r.match(/^\[([^\]]+)\]/)?.[1])
         .filter((d): d is string => !!d && d !== '비서')
@@ -909,14 +908,58 @@ ${prevContext}
         마케팅: '📡', 기획: '📝', 개발: '⚙️', 배포: '🚀', 검수: '🛡️',
         정산: '💰', 운영: '🖥️', 비서: '📅', 레포: '🔗', 영업: '💼',
       }
-      for (const dept of uniqueDepts) {
+      // 각 부서별 상세 보고서를 AI가 별도 생성
+      const reportPromises = uniqueDepts.map(async (dept) => {
         const deptReplies = replies.filter(r => r.startsWith(`[${dept}]`)).join('\n')
-        if (!deptReplies) continue
-        const title = `${dept} - ${agenda.slice(0, 30)}`
-        const content = `# ${title}\n\n작성일: ${new Date().toLocaleDateString('ko-KR')}\n회의 안건: ${agenda}\n\n## ${dept} 부서 보고\n${deptReplies}`
-        const result = await notionCreatePage(NOTION_REPORT_PAGE_ID, title, content, DEPT_EMOJI[dept] || '📄')
-        if (result) notionResults.push({ dept, title, url: result.url })
-      }
+        if (!deptReplies) return null
+        const leader = leaders.find(l => l.dept === dept)
+        const leaderName = leader?.name || dept
+        const persona = DEPT_PERSONA[dept] || ''
+        const skills = DEPT_SKILLS[dept] || ''
+
+        const reportPrompt = `당신은 AI 회사 "QuickBizLab"의 ${dept} 부서 ${leader?.role || '팀장'} "${leaderName}"입니다.
+${persona}
+
+대표님이 회의에서 다음을 지시했습니다: "${agenda}"
+회의에서 당신의 발언: ${deptReplies}
+${skills ? `보유 스킬: ${skills.slice(0, 120)}` : ''}
+
+위 내용을 바탕으로 **상세 보고서**를 Markdown 형식으로 작성하세요.
+
+보고서 형식:
+# ${dept} 부서 보고서 - ${agenda.slice(0, 25)}
+
+**작성자:** ${leaderName} (${dept} ${leader?.role || '팀장'})
+**작성일:** ${new Date().toLocaleDateString('ko-KR')}
+
+## 1. 현황 분석
+(구체적 수치, 데이터 기반)
+
+## 2. 실행 계획
+(단계별 액션 아이템)
+
+## 3. 예상 성과
+(KPI, 목표 수치)
+
+## 4. 리스크 및 대응
+(잠재 리스크, 대응 방안)
+
+규칙:
+- 한국어, ${dept} 전문 관점, 구체적 수치 포함, 500~800자
+- 회의 발언 내용을 확장하여 상세하게 작성`
+
+        const { reply: reportContent, model: rModel } = await aiChat(reportPrompt, 40, undefined, undefined, 4000)
+        if (rModel === 'fallback' || !reportContent) return null
+
+        const titleMatch = reportContent.match(/^#\s+(.+)/m)
+        const title = titleMatch ? titleMatch[1].trim() : `${dept} 부서 보고서`
+        const result = await notionCreatePage(NOTION_REPORT_PAGE_ID, title, reportContent, DEPT_EMOJI[dept] || '📄')
+        if (result) return { dept, title, url: result.url }
+        return null
+      })
+
+      const results = await Promise.all(reportPromises)
+      notionResults = results.filter((r): r is { dept: string; title: string; url: string } => r !== null)
     }
 
     return NextResponse.json({ replies, model, notionResults: notionResults.length > 0 ? notionResults : undefined })
