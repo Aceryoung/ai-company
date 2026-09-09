@@ -881,7 +881,8 @@ ${prevContext}
 3. 이모지 1개씩 사용합니다.
 4. 마지막에 비서 이수연이 회의 내용을 한 줄 정리합니다.
 5. "저는 AI입니다" 같은 말 절대 금지.
-6. **즉시 보고**: 미래 약속 금지. 지금 바로 구체적 의견과 결과를 말하세요.`
+6. **즉시 보고**: 미래 약속 금지. 지금 바로 구체적 의견과 결과를 말하세요.
+7. **정직 원칙**: 실제로 수행하지 않은 작업(업로드, 문서 생성 등)을 했다고 말하지 마세요. "작성하겠습니다", "업로드 예정입니다"처럼 의향만 말하세요.`
 
     const { reply, model } = await aiChat(meetingPrompt, 45, undefined, undefined, 4000)
     if (model === 'fallback') {
@@ -891,7 +892,34 @@ ${prevContext}
       })
     }
     const replies = reply.split('\n').filter(line => line.trim().startsWith('['))
-    return NextResponse.json({ replies, model })
+
+    // 회의에서 보고서/업로드 관련 지시 감지 → 실제 Notion 저장
+    const agendaLower = agenda.toLowerCase()
+    const needsUpload = (agendaLower.includes('업로드') || agendaLower.includes('작성') || agendaLower.includes('보고서') || agendaLower.includes('노션'))
+      && (agendaLower.includes('업로드') || agendaLower.includes('올려') || agendaLower.includes('저장') || agendaLower.includes('작성'))
+    let notionResults: Array<{ dept: string; title: string; url: string }> = []
+    if (needsUpload) {
+      // 발언한 팀장들의 보고서를 Notion에 실제 저장
+      const speakingDepts = replies
+        .map(r => r.match(/^\[([^\]]+)\]/)?.[1])
+        .filter((d): d is string => !!d && d !== '비서')
+      const uniqueDepts = [...new Set(speakingDepts)]
+      const DEPT_EMOJI: Record<string, string> = {
+        채용: '👥', 회고: '📖', 고객소통: '💬', 시장조사: '🔍', 경영: '📊',
+        마케팅: '📡', 기획: '📝', 개발: '⚙️', 배포: '🚀', 검수: '🛡️',
+        정산: '💰', 운영: '🖥️', 비서: '📅', 레포: '🔗', 영업: '💼',
+      }
+      for (const dept of uniqueDepts) {
+        const deptReplies = replies.filter(r => r.startsWith(`[${dept}]`)).join('\n')
+        if (!deptReplies) continue
+        const title = `${dept} - ${agenda.slice(0, 30)}`
+        const content = `# ${title}\n\n작성일: ${new Date().toLocaleDateString('ko-KR')}\n회의 안건: ${agenda}\n\n## ${dept} 부서 보고\n${deptReplies}`
+        const result = await notionCreatePage(NOTION_REPORT_PAGE_ID, title, content, DEPT_EMOJI[dept] || '📄')
+        if (result) notionResults.push({ dept, title, url: result.url })
+      }
+    }
+
+    return NextResponse.json({ replies, model, notionResults: notionResults.length > 0 ? notionResults : undefined })
   }
 
   // 부서 신설
@@ -948,7 +976,8 @@ ${context ? `■ 이전 단계 결과:\n${context}\n` : ''}
 4. 존댓말, 이모지 1~2개, 순수 대사만
 5. "저는 AI입니다" 금지
 6. 미래 약속 금지 — 즉시 결과 보고
-${role === '레드팀' ? '7. [레드팀] 리스크/문제점 지적 + 개선안' : ''}`
+7. **정직 원칙**: 실제로 수행하지 않은 작업(노션 업로드, 파일 생성 등)을 했다고 말하지 마세요. 시스템이 자동으로 저장합니다.
+${role === '레드팀' ? '8. [레드팀] 리스크/문제점 지적 + 개선안' : ''}`
 
     const { reply, model } = await aiChat(taskPrompt, 30, dept)
     if (model === 'fallback') {

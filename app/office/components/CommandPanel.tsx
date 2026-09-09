@@ -842,7 +842,7 @@ export function CommandPanel({ isMobile, onSwitchToOffice }: Props) {
           previousSummary: updatedHistory.slice(-10).join('\n'),
         }),
       })
-      const data = await res.json() as { replies: string[]; model?: string }
+      const data = await res.json() as { replies: string[]; model?: string; notionResults?: Array<{ dept: string; title: string; url: string }> }
 
       // 팀장 발언을 순차적으로 표시
       const replyLines: string[] = []
@@ -850,6 +850,14 @@ export function CommandPanel({ isMobile, onSwitchToOffice }: Props) {
         await new Promise(r => setTimeout(r, 400))
         addLog('employee', data.replies[i])
         replyLines.push(data.replies[i])
+      }
+
+      // Notion 저장 결과 표시
+      if (data.notionResults && data.notionResults.length > 0) {
+        addLog('sys', `📎 Notion에 ${data.notionResults.length}건 실제 저장 완료:`)
+        for (const nr of data.notionResults) {
+          addLog('sys', `  ✅ [${nr.dept}] "${nr.title}"`)
+        }
       }
 
       // 히스토리 업데이트
