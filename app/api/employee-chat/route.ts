@@ -237,6 +237,59 @@ const NOTION_QUICKBIZLAB_PAGE_ID = '2bc67a0561d581f784a1db047bf29080'
 const NOTION_REPORT_PAGE_ID = '3d467a0561d581a79a6dde2d7924ce24'
 const NOTION_QUOTE_PAGE_ID = '3d567a0561d58187a64cccb9bbf7bbe1'
 
+// 부서별 Notion 페이지 ID (AI보고서 하위)
+const DEPT_NOTION_PAGES: Record<string, string> = {
+  '경영': '3d667a0561d58193b426d4273c385940',
+  '시장조사': '3d667a0561d58180b9f3dc9714301020',
+  '영업': '3d667a0561d581a99e1ccee7c840e52e',
+  '마케팅': '3d667a0561d581488405ec62a721fa93',
+  '기획': '3d667a0561d5812a804ae94901c94f9c',
+  '검수': '3d667a0561d58154a84ae13c332996a0',
+  '개발': '3d667a0561d58118a06ef3ac133d4976',
+  '배포': '3d667a0561d5812ba56cc6553d7652f3',
+  '고객소통': '3d667a0561d5813da26ddf1f6a49c0fb',
+  '정산': '3d667a0561d5813db3edd7ea96f9af7f',
+  '회고': '3d667a0561d581dd90a1dae789a2044a',
+  '운영': '3d667a0561d581279a38cf0f7c8af918',
+  '비서': '3d667a0561d58121b519db65c3810c4c',
+  '레포': '3d667a0561d58129b5cfc8761de137cb',
+  '채용': '3d667a0561d5815b97aaf6a1a2958dbf',
+}
+
+// 부서 이름으로 Notion 페이지 ID 찾기 (없으면 AI보고서 루트)
+function getDeptNotionPageId(dept: string): string {
+  return DEPT_NOTION_PAGES[dept] || NOTION_REPORT_PAGE_ID
+}
+
+// ── URL 내용 가져오기 (직원에게 링크 분석 요청 시)
+const URL_REGEX = /https?:\/\/[^\s<>"')\]]+/gi
+
+async function fetchUrlContent(url: string): Promise<string | null> {
+  try {
+    const res = await fetch(url, {
+      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; QuickBizLab/1.0)' },
+      signal: AbortSignal.timeout(10_000),
+      redirect: 'follow',
+    })
+    if (!res.ok) return null
+    const contentType = res.headers.get('content-type') || ''
+    if (!contentType.includes('text/html') && !contentType.includes('text/plain') && !contentType.includes('application/json')) {
+      return `[${contentType} 파일, 텍스트 추출 불가]`
+    }
+    const html = await res.text()
+    // HTML 태그 제거, 텍스트만 추출
+    const text = html
+      .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
+      .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+    return text.slice(0, 3000) // 토큰 절약 위해 3000자 제한
+  } catch {
+    return null
+  }
+}
+
 async function notionSearch(query: string, pageSize = 5): Promise<Array<{ id: string; title: string; url: string; lastEdited: string }>> {
   const notionKey = process.env.NOTION_API_KEY
   if (!notionKey) return []
@@ -563,7 +616,7 @@ async function geminiChatSingle(model: string, prompt: string, maxTokens: number
     if (data.error) {
       const errMsg = data.error.message || ''
       // 한도/할당량 에러 → 이 모델 차단
-      if (data.error.code === 429 || /quota|rate.limit|exceeded|RESOURCE_EXHAUSTED/i.test(errMsg)) {
+      if (data.error.code === 429 || data.error.code === 503 || /quota|rate.limit|exceeded|RESOURCE_EXHAUSTED|high.demand|overloaded|unavailable/i.test(errMsg)) {
         blockModel(model)
       }
       return `GEMINI_ERROR: ${errMsg.slice(0, 100)}`
@@ -591,8 +644,8 @@ async function geminiChat(prompt: string, maxTokens = 2000): Promise<string> {
     if (!result.startsWith('GEMINI_ERROR:')) {
       return result  // 성공
     }
-    // 한도 에러가 아닌 다른 에러면 다음 모델 시도하지 않음 (프롬프트 문제 등)
-    if (!/quota|rate.limit|exceeded|RESOURCE_EXHAUSTED|429/i.test(result)) {
+    // 한도/과부하 에러 → 다음 모델 시도. 그 외 에러 (프롬프트 문제 등)면 중단
+    if (!/quota|rate.limit|exceeded|RESOURCE_EXHAUSTED|429|high.demand|overloaded|unavailable|503/i.test(result)) {
       return result
     }
     // 한도 에러 → 다음 모델로 자동 전환
@@ -860,12 +913,23 @@ export async function POST(req: NextRequest) {
     }).join('\n')
     const prevContext = body.previousSummary ? `\n■ 이전 회의 맥락:\n${body.previousSummary}\n` : ''
 
+    // 회의 안건에 URL 포함 시 내용 가져오기
+    const meetingUrls = agenda.match(URL_REGEX) || []
+    let meetingUrlContext = ''
+    if (meetingUrls.length > 0) {
+      const fetched = await Promise.all(meetingUrls.slice(0, 2).map(async (url: string) => {
+        const content = await fetchUrlContent(url)
+        return content ? `\n■ 참고 URL (${url}):\n${content}\n` : ''
+      }))
+      meetingUrlContext = fetched.filter(Boolean).join('')
+    }
+
     const meetingPrompt = `[역할극 — 팀장 회의]
 AI 회사 "QuickBizLab"의 대표 꽁꽁이 팀장 회의를 소집했습니다.
 
 참석자 (각자 보유 스킬 활용 가능):
 ${leaderList}
-${prevContext}
+${prevContext}${meetingUrlContext}
 대표님 발언: "${agenda}"
 
 각 팀장이 자기 부서 관점에서 1~2문장으로 의견을 말합니다.
@@ -953,7 +1017,7 @@ ${skills ? `보유 스킬: ${skills.slice(0, 120)}` : ''}
 
         const titleMatch = reportContent.match(/^#\s+(.+)/m)
         const title = titleMatch ? titleMatch[1].trim() : `${dept} 부서 보고서`
-        const result = await notionCreatePage(NOTION_REPORT_PAGE_ID, title, reportContent, DEPT_EMOJI[dept] || '📄')
+        const result = await notionCreatePage(getDeptNotionPageId(dept), title, reportContent, DEPT_EMOJI[dept] || '📄')
         if (result) return { dept, title, url: result.url }
         return null
       })
@@ -1003,6 +1067,17 @@ JSON 형식만 출력:
     const { employeeName: name, dept, role, speech, message: taskDesc } = body
     const context = body.previousSummary || ''
 
+    // URL 감지 → 내용 가져오기
+    const taskUrls = taskDesc.match(URL_REGEX) || []
+    let taskUrlContext = ''
+    if (taskUrls.length > 0) {
+      const fetched = await Promise.all(taskUrls.slice(0, 2).map(async (url: string) => {
+        const content = await fetchUrlContent(url)
+        return content ? `\n■ URL 분석 (${url}):\n${content}\n` : `\n■ URL (${url}): 내용을 가져올 수 없습니다.\n`
+      }))
+      taskUrlContext = fetched.join('')
+    }
+
     const skills = DEPT_SKILLS[dept] || ''
     const taskPrompt = `[역할극 — 자율 업무 수행]
 당신은 AI 회사 "QuickBizLab"의 ${dept} 부서 ${role} "${name}"입니다.
@@ -1010,7 +1085,7 @@ JSON 형식만 출력:
 ${skills ? `\n■ 보유 스킬: ${skills}\n  → 업무에 적합한 스킬을 활용하고, 사용한 스킬은 [스킬명]으로 표시하세요.` : ''}
 
 ■ 대표님이 내린 업무 지시: "${taskDesc}"
-${context ? `■ 이전 단계 결과:\n${context}\n` : ''}
+${context ? `■ 이전 단계 결과:\n${context}\n` : ''}${taskUrlContext}
 
 ■ 출력 규칙:
 1. 첫 줄: [진행] 작업 시작 한마디 (사용할 스킬 언급)
@@ -1052,12 +1127,12 @@ ${role === '레드팀' ? '8. [레드팀] 리스크/문제점 지적 + 개선안'
         마케팅: '📡', 기획: '📝', 개발: '⚙️', 배포: '🚀', 검수: '🛡️',
         정산: '💰', 운영: '🖥️', 비서: '📅', 레포: '🔗', 영업: '💼',
       }
-      const notionResult = await notionCreatePage(NOTION_REPORT_PAGE_ID, title, reply, DEPT_EMOJI[dept] || '📄')
+      const notionResult = await notionCreatePage(getDeptNotionPageId(dept), title, reply, DEPT_EMOJI[dept] || '📄')
       if (notionResult) notionSaved = { title, url: notionResult.url, type: '보고서' }
     } else if (taskLower.includes('노션') && (taskLower.includes('업로드') || taskLower.includes('작성') || taskLower.includes('만들') || taskLower.includes('생성'))) {
-      // 일반 노션 업로드 요청 → 결과를 Notion에 저장
+      // 일반 노션 업로드 요청 → 부서별 페이지에 저장
       const title = `${dept} - ${taskDesc.slice(0, 30)}`
-      const notionResult = await notionCreatePage(NOTION_QUICKBIZLAB_PAGE_ID, title, reply, '📋')
+      const notionResult = await notionCreatePage(getDeptNotionPageId(dept), title, reply, '📋')
       if (notionResult) notionSaved = { title, url: notionResult.url, type: '문서' }
     }
 
@@ -1217,6 +1292,17 @@ ${phaseResults}
 
   const contextData = await getContextData(dept, message)
 
+  // URL 감지 → 내용 가져오기
+  const urls = message.match(URL_REGEX) || []
+  let urlContext = ''
+  if (urls.length > 0) {
+    const fetched = await Promise.all(urls.slice(0, 2).map(async (url) => {
+      const content = await fetchUrlContent(url)
+      return content ? `\n■ URL 분석 (${url}):\n${content}\n` : `\n■ URL (${url}): 내용을 가져올 수 없습니다.\n`
+    }))
+    urlContext = fetched.join('')
+  }
+
   const prompt = `[역할극] 당신은 AI 회사 "QuickBizLab"의 직원 "${employeeName}"입니다.
 절대 AI 어시스턴트가 아닙니다. 당신은 사람 직원입니다.
 
@@ -1232,7 +1318,7 @@ ${rolePersona}
 
 ■ 보유 스킬 (업무 시 적극 활용, 사용한 스킬은 [스킬명]으로 표시)
 ${skillList}
-${contextData}${summaryText}
+${contextData}${urlContext}${summaryText}
 ■ 절대 규칙
 1. 당신은 "${employeeName}"입니다. 캐릭터를 벗어나지 마세요.
 2. 대표님(꽁꽁)에게 존댓말을 사용합니다.
