@@ -276,7 +276,10 @@ async function notionSearch(query: string, pageSize = 5): Promise<Array<{ id: st
         lastEdited: (r.last_edited_time as string || '').slice(0, 10),
       }
     })
-  } catch { return [] }
+  } catch (err) {
+    console.error('[Notion] search error:', err)
+    return []
+  }
 }
 
 async function notionCreatePage(parentId: string, title: string, content: string, icon?: string): Promise<{ id: string; url: string } | null> {
@@ -309,10 +312,17 @@ async function notionCreatePage(parentId: string, title: string, content: string
       body: JSON.stringify(body),
       signal: AbortSignal.timeout(15_000),
     })
-    const data = await res.json() as { id?: string; url?: string; status?: number }
-    if (!data.id) return null
+    const data = await res.json() as { id?: string; url?: string; status?: number; message?: string; code?: string }
+    if (!data.id) {
+      console.error('[Notion] createPage failed:', JSON.stringify(data).slice(0, 300))
+      return null
+    }
+    console.log('[Notion] page created:', data.id, data.url)
     return { id: data.id, url: data.url || '' }
-  } catch { return null }
+  } catch (err) {
+    console.error('[Notion] createPage error:', err)
+    return null
+  }
 }
 
 async function getNotionContext(query: string): Promise<string> {
@@ -956,6 +966,7 @@ ${role === '레드팀' ? '7. [레드팀] 리스크/문제점 지적 + 개선안'
     // 자율 업무 결과물을 Notion에 실제 저장
     let notionSaved: { title: string; url: string; type: string } | null = null
     const taskLower = taskDesc.toLowerCase()
+    console.log('[autonomous-task] taskDesc:', taskDesc.slice(0, 80), '| shouldQuote:', shouldGenerateQuote(taskDesc), '| hasReportKw:', REPORT_KEYWORDS.some(k => taskLower.includes(k)))
     if (shouldGenerateQuote(taskDesc)) {
       // 견적서 생성 → Notion 저장
       const quoteResult = await generateAndSaveQuote(name, dept, role, taskDesc, context)
