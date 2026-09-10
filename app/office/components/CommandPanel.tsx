@@ -77,11 +77,67 @@ export function CommandPanel({ isMobile, onSwitchToOffice }: Props) {
   } | null>(null)
   const [contentPreview, setContentPreview] = useState<{
     type: string; title: string; html: string; url: string
-    cardnewsData?: { slides: Array<{ title: string; body: string; emoji?: string; layout?: string; items?: Array<{ label: string; value?: string; checked?: boolean; date?: string }> }>; hashtags?: string[] }
+    cardnewsData?: { slides: Array<{ title: string; body: string; emoji?: string; layout?: string; imageUrl?: string; items?: Array<{ label: string; value?: string; checked?: boolean; date?: string }> }>; hashtags?: string[] }
     imageReady?: boolean
   } | null>(null)
   const [generatingImages, setGeneratingImages] = useState(false)
   const [generatedImages, setGeneratedImages] = useState<string[]>([])
+  const [editingSlide, setEditingSlide] = useState<number | null>(null)
+
+  // 슬라이드 편집 헬퍼
+  const updateSlide = (index: number, patch: Record<string, unknown>) => {
+    if (!contentPreview?.cardnewsData) return
+    const slides = [...contentPreview.cardnewsData.slides]
+    slides[index] = { ...slides[index], ...patch }
+    setContentPreview({ ...contentPreview, cardnewsData: { ...contentPreview.cardnewsData, slides } })
+  }
+  const moveSlide = (from: number, to: number) => {
+    if (!contentPreview?.cardnewsData) return
+    const slides = [...contentPreview.cardnewsData.slides]
+    const [moved] = slides.splice(from, 1)
+    slides.splice(to, 0, moved)
+    setContentPreview({ ...contentPreview, cardnewsData: { ...contentPreview.cardnewsData, slides } })
+    setEditingSlide(to)
+  }
+  const deleteSlide = (index: number) => {
+    if (!contentPreview?.cardnewsData) return
+    const slides = contentPreview.cardnewsData.slides.filter((_, i) => i !== index)
+    setContentPreview({ ...contentPreview, cardnewsData: { ...contentPreview.cardnewsData, slides } })
+    setEditingSlide(null)
+  }
+  const addSlide = () => {
+    if (!contentPreview?.cardnewsData) return
+    const slides = [...contentPreview.cardnewsData.slides, { title: '새 슬라이드', body: '', emoji: '✨', layout: 'basic' }]
+    setContentPreview({ ...contentPreview, cardnewsData: { ...contentPreview.cardnewsData, slides } })
+    setEditingSlide(slides.length - 1)
+  }
+  const updateHashtags = (text: string) => {
+    if (!contentPreview?.cardnewsData) return
+    const hashtags = text.split(/[,\s#]+/).filter(Boolean)
+    setContentPreview({ ...contentPreview, cardnewsData: { ...contentPreview.cardnewsData, hashtags } })
+  }
+  const updateSlideItem = (slideIdx: number, itemIdx: number, patch: Record<string, unknown>) => {
+    if (!contentPreview?.cardnewsData) return
+    const slides = [...contentPreview.cardnewsData.slides]
+    const items = [...(slides[slideIdx].items || [])]
+    items[itemIdx] = { ...items[itemIdx], ...patch }
+    slides[slideIdx] = { ...slides[slideIdx], items }
+    setContentPreview({ ...contentPreview, cardnewsData: { ...contentPreview.cardnewsData, slides } })
+  }
+  const addSlideItem = (slideIdx: number) => {
+    if (!contentPreview?.cardnewsData) return
+    const slides = [...contentPreview.cardnewsData.slides]
+    const items = [...(slides[slideIdx].items || []), { label: '항목', value: '' }]
+    slides[slideIdx] = { ...slides[slideIdx], items }
+    setContentPreview({ ...contentPreview, cardnewsData: { ...contentPreview.cardnewsData, slides } })
+  }
+  const deleteSlideItem = (slideIdx: number, itemIdx: number) => {
+    if (!contentPreview?.cardnewsData) return
+    const slides = [...contentPreview.cardnewsData.slides]
+    const items = (slides[slideIdx].items || []).filter((_, i) => i !== itemIdx)
+    slides[slideIdx] = { ...slides[slideIdx], items }
+    setContentPreview({ ...contentPreview, cardnewsData: { ...contentPreview.cardnewsData, slides } })
+  }
   const logRef = useRef<HTMLDivElement>(null)
 
   // 마운트 후 localStorage 복원
@@ -1342,49 +1398,173 @@ export function CommandPanel({ isMobile, onSwitchToOffice }: Props) {
       {/* 콘텐츠 미리보기 모달 */}
       {contentPreview && (
         <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/70 p-3">
-          <div className="bg-[#0d1520] border border-[#1e3a5f] rounded-lg max-w-lg w-full max-h-[90%] flex flex-col">
+          <div className="bg-[#0d1520] border border-[#1e3a5f] rounded-lg max-w-2xl w-full max-h-[95%] flex flex-col">
             {/* 헤더 */}
             <div className="flex items-center justify-between px-4 py-3 border-b border-[#1e3a5f]">
               <div>
-                <div className="text-sm font-bold text-[#4af]">🎨 {contentPreview.type} 미리보기</div>
-                <div className="text-[10px] text-[#6b8cbb]">{contentPreview.title}</div>
+                <div className="text-sm font-bold text-[#4af]">🎨 {contentPreview.type} 편집기</div>
+                <div className="text-[10px] text-[#6b8cbb]">{contentPreview.cardnewsData?.slides.length || 0}장 슬라이드 · 클릭하여 편집</div>
               </div>
-              <button onClick={() => { setContentPreview(null); setGeneratedImages([]) }} className="text-[#6b8cbb] hover:text-[#4af] text-lg">✕</button>
+              <div className="flex gap-2 items-center">
+                {contentPreview.cardnewsData && (
+                  <button onClick={addSlide} className="text-[10px] px-2 py-1 bg-[#1a2a3f] text-[#4af] rounded hover:bg-[#243a55]">+ 슬라이드</button>
+                )}
+                <button onClick={() => { setContentPreview(null); setGeneratedImages([]); setEditingSlide(null) }} className="text-[#6b8cbb] hover:text-[#4af] text-lg">✕</button>
+              </div>
             </div>
 
-            {/* 미리보기 본문 */}
+            {/* 편집 본문 */}
             <div className="flex-1 overflow-y-auto p-4">
               {contentPreview.cardnewsData ? (
                 <div className="space-y-3">
                   {contentPreview.cardnewsData.slides.map((slide, i) => (
-                    <div key={i} className={`rounded-lg p-4 ${i === 0 ? 'bg-indigo-600 text-white' : i === contentPreview.cardnewsData!.slides.length - 1 ? 'bg-purple-700 text-white' : 'bg-[#1a2a3f] text-[#e2e8f0]'}`} style={{ aspectRatio: '4/5' }}>
-                      <div className="flex justify-between items-center mb-1">
-                        <div className="text-[10px] text-[#94a3b8]">슬라이드 {i + 1}/{contentPreview.cardnewsData!.slides.length}</div>
-                        {slide.layout && <div className="text-[9px] px-1.5 py-0.5 rounded bg-[#2a3a5f] text-[#6b8cbb]">{slide.layout}</div>}
+                    <div key={i} className={`rounded-lg border-2 transition-all ${editingSlide === i ? 'border-[#4af]' : 'border-transparent hover:border-[#1e3a5f]'}`}>
+                      {/* 슬라이드 카드 — 클릭으로 편집 토글 */}
+                      <div
+                        onClick={() => setEditingSlide(editingSlide === i ? null : i)}
+                        className={`rounded-lg p-4 cursor-pointer ${i === 0 ? 'bg-indigo-600 text-white' : i === contentPreview.cardnewsData!.slides.length - 1 ? 'bg-purple-700 text-white' : 'bg-[#1a2a3f] text-[#e2e8f0]'}`}
+                      >
+                        <div className="flex justify-between items-center mb-1">
+                          <div className="text-[10px] text-[#94a3b8] flex items-center gap-2">
+                            슬라이드 {i + 1}/{contentPreview.cardnewsData!.slides.length}
+                            {editingSlide === i ? <span className="text-[#4af]">✏️ 편집 중</span> : <span className="opacity-50">클릭하여 편집</span>}
+                          </div>
+                          <div className="flex items-center gap-1">
+                            {slide.layout && <div className="text-[9px] px-1.5 py-0.5 rounded bg-black/20 text-white/70">{slide.layout}</div>}
+                          </div>
+                        </div>
+                        {slide.emoji && <div className="text-2xl mb-1">{slide.emoji}</div>}
+                        <div className={`font-bold text-sm mb-1 ${i === 0 || i === contentPreview.cardnewsData!.slides.length - 1 ? 'text-white' : 'text-[#4af]'}`}>{slide.title}</div>
+                        {slide.body && <div className="text-xs leading-relaxed">{slide.body}</div>}
+                        {slide.imageUrl && <div className="text-[10px] text-green-400 mt-1">🖼️ 이미지: {slide.imageUrl.slice(0, 40)}...</div>}
+                        {slide.items && slide.items.length > 0 && (
+                          <div className="mt-2 space-y-1">
+                            {slide.items.slice(0, 3).map((item, j) => (
+                              <div key={j} className="text-[10px] text-[#94a3b8] flex gap-1">
+                                {slide.layout === 'checklist' && <span>{item.checked ? '✅' : '⬜'}</span>}
+                                {item.date && <span className="text-[#6b8cbb]">{item.date}</span>}
+                                <span>{item.label}</span>
+                                {item.value && <span className="ml-auto text-[#4af]">{item.value}</span>}
+                              </div>
+                            ))}
+                            {slide.items.length > 3 && <div className="text-[9px] text-white/50">+{slide.items.length - 3}개 더</div>}
+                          </div>
+                        )}
                       </div>
-                      {slide.emoji && <div className="text-2xl mb-1">{slide.emoji}</div>}
-                      <div className={`font-bold text-sm mb-1 ${i === 0 || i === contentPreview.cardnewsData!.slides.length - 1 ? 'text-white' : 'text-[#4af]'}`}>{slide.title}</div>
-                      {slide.body && <div className="text-xs leading-relaxed">{slide.body}</div>}
-                      {slide.items && slide.items.length > 0 && (
-                        <div className="mt-2 space-y-1">
-                          {slide.items.slice(0, 4).map((item, j) => (
-                            <div key={j} className="text-[10px] text-[#94a3b8] flex gap-1">
-                              {slide.layout === 'checklist' && <span>{item.checked ? '✅' : '⬜'}</span>}
-                              {item.date && <span className="text-[#6b8cbb]">{item.date}</span>}
-                              <span>{item.label}</span>
-                              {item.value && <span className="ml-auto text-[#4af]">{item.value}</span>}
+
+                      {/* 편집 패널 */}
+                      {editingSlide === i && (
+                        <div className="bg-[#0a1525] p-3 space-y-2 border-t border-[#1e3a5f]">
+                          {/* 이모지 + 제목 */}
+                          <div className="flex gap-2">
+                            <input
+                              value={slide.emoji || ''}
+                              onChange={e => updateSlide(i, { emoji: e.target.value })}
+                              className="w-12 text-center bg-[#1a2a3f] border border-[#2a3a5f] rounded px-1 py-1 text-lg"
+                              placeholder="🚀"
+                            />
+                            <input
+                              value={slide.title}
+                              onChange={e => updateSlide(i, { title: e.target.value })}
+                              className="flex-1 bg-[#1a2a3f] border border-[#2a3a5f] rounded px-2 py-1 text-sm text-[#e2e8f0]"
+                              placeholder="제목"
+                            />
+                          </div>
+
+                          {/* 본문 */}
+                          <textarea
+                            value={slide.body || ''}
+                            onChange={e => updateSlide(i, { body: e.target.value })}
+                            className="w-full bg-[#1a2a3f] border border-[#2a3a5f] rounded px-2 py-1 text-xs text-[#e2e8f0] resize-none"
+                            rows={2}
+                            placeholder="본문 (선택)"
+                          />
+
+                          {/* 이미지 URL */}
+                          <div className="flex gap-2 items-center">
+                            <span className="text-[10px] text-[#6b8cbb] shrink-0">🖼️ 이미지</span>
+                            <input
+                              value={slide.imageUrl || ''}
+                              onChange={e => updateSlide(i, { imageUrl: e.target.value })}
+                              className="flex-1 bg-[#1a2a3f] border border-[#2a3a5f] rounded px-2 py-1 text-[10px] text-[#e2e8f0]"
+                              placeholder="https://... (공개 이미지 URL)"
+                            />
+                          </div>
+
+                          {/* 레이아웃 선택 */}
+                          <div className="flex gap-1 flex-wrap">
+                            <span className="text-[10px] text-[#6b8cbb] self-center mr-1">레이아웃:</span>
+                            {['cover', 'basic', 'stats', 'checklist', 'comparison', 'timeline', 'table', 'quote', 'cta'].map(l => (
+                              <button
+                                key={l}
+                                onClick={() => updateSlide(i, { layout: l })}
+                                className={`text-[9px] px-2 py-0.5 rounded ${slide.layout === l ? 'bg-[#4af] text-black font-bold' : 'bg-[#1a2a3f] text-[#6b8cbb] hover:bg-[#243a55]'}`}
+                              >{l}</button>
+                            ))}
+                          </div>
+
+                          {/* Items 편집 (stats/checklist/comparison/timeline/table) */}
+                          {['stats', 'checklist', 'comparison', 'timeline', 'table'].includes(slide.layout || '') && (
+                            <div className="space-y-1">
+                              <div className="flex items-center justify-between">
+                                <span className="text-[10px] text-[#6b8cbb]">📋 항목 ({slide.items?.length || 0})</span>
+                                <button onClick={() => addSlideItem(i)} className="text-[9px] px-2 py-0.5 bg-[#1a2a3f] text-[#4af] rounded hover:bg-[#243a55]">+ 항목</button>
+                              </div>
+                              {(slide.items || []).map((item, j) => (
+                                <div key={j} className="flex gap-1 items-center">
+                                  {slide.layout === 'checklist' && (
+                                    <button onClick={() => updateSlideItem(i, j, { checked: !item.checked })} className="text-sm shrink-0">
+                                      {item.checked ? '✅' : '⬜'}
+                                    </button>
+                                  )}
+                                  {slide.layout === 'timeline' && (
+                                    <input
+                                      value={item.date || ''}
+                                      onChange={e => updateSlideItem(i, j, { date: e.target.value })}
+                                      className="w-16 bg-[#1a2a3f] border border-[#2a3a5f] rounded px-1 py-0.5 text-[10px] text-[#6b8cbb]"
+                                      placeholder="날짜"
+                                    />
+                                  )}
+                                  <input
+                                    value={item.label}
+                                    onChange={e => updateSlideItem(i, j, { label: e.target.value })}
+                                    className="flex-1 bg-[#1a2a3f] border border-[#2a3a5f] rounded px-1 py-0.5 text-[10px] text-[#e2e8f0]"
+                                    placeholder="항목명"
+                                  />
+                                  <input
+                                    value={item.value || ''}
+                                    onChange={e => updateSlideItem(i, j, { value: e.target.value })}
+                                    className="w-20 bg-[#1a2a3f] border border-[#2a3a5f] rounded px-1 py-0.5 text-[10px] text-[#4af]"
+                                    placeholder="값"
+                                  />
+                                  <button onClick={() => deleteSlideItem(i, j)} className="text-red-400 text-[10px] hover:text-red-300 shrink-0">✕</button>
+                                </div>
+                              ))}
                             </div>
-                          ))}
-                          {slide.items.length > 4 && <div className="text-[9px] text-[#6b8cbb]">+{slide.items.length - 4}개 더...</div>}
+                          )}
+
+                          {/* 슬라이드 조작 버튼 */}
+                          <div className="flex gap-1 pt-1 border-t border-[#1e3a5f]">
+                            <button disabled={i === 0} onClick={() => moveSlide(i, i - 1)} className="text-[10px] px-2 py-0.5 bg-[#1a2a3f] text-[#6b8cbb] rounded hover:bg-[#243a55] disabled:opacity-30">↑ 위로</button>
+                            <button disabled={i === contentPreview.cardnewsData!.slides.length - 1} onClick={() => moveSlide(i, i + 1)} className="text-[10px] px-2 py-0.5 bg-[#1a2a3f] text-[#6b8cbb] rounded hover:bg-[#243a55] disabled:opacity-30">↓ 아래로</button>
+                            <div className="flex-1" />
+                            <button onClick={() => { if (confirm('이 슬라이드를 삭제하시겠습니까?')) deleteSlide(i) }} className="text-[10px] px-2 py-0.5 bg-red-900/30 text-red-400 rounded hover:bg-red-900/50">🗑 삭제</button>
+                          </div>
                         </div>
                       )}
                     </div>
                   ))}
-                  {contentPreview.cardnewsData.hashtags && (
-                    <div className="text-[10px] text-[#6b8cbb]">
-                      {contentPreview.cardnewsData.hashtags.map(t => `#${t}`).join(' ')}
-                    </div>
-                  )}
+
+                  {/* 해시태그 편집 */}
+                  <div className="pt-2 border-t border-[#1e3a5f]">
+                    <div className="text-[10px] text-[#6b8cbb] mb-1"># 해시태그 (쉼표/공백 구분)</div>
+                    <input
+                      value={contentPreview.cardnewsData.hashtags?.join(' ') || ''}
+                      onChange={e => updateHashtags(e.target.value)}
+                      className="w-full bg-[#1a2a3f] border border-[#2a3a5f] rounded px-2 py-1 text-[10px] text-[#4af]"
+                      placeholder="키워드1 키워드2 키워드3"
+                    />
+                  </div>
                 </div>
               ) : (
                 <div className="text-xs text-[#e2e8f0] leading-relaxed whitespace-pre-wrap">
@@ -1408,14 +1588,15 @@ export function CommandPanel({ isMobile, onSwitchToOffice }: Props) {
             {/* 하단 버튼 */}
             <div className="flex gap-2 px-4 py-3 border-t border-[#1e3a5f]">
               <a href={contentPreview.url} target="_blank" rel="noopener noreferrer"
-                className="flex-1 text-center text-xs py-2 bg-[#1a2a3f] text-[#4af] rounded hover:bg-[#243a55] transition">
-                📎 Notion에서 보기
+                className="text-center text-xs py-2 px-3 bg-[#1a2a3f] text-[#4af] rounded hover:bg-[#243a55] transition">
+                📎 Notion
               </a>
               {contentPreview.imageReady && generatedImages.length === 0 && (
                 <button
                   onClick={async () => {
                     if (!contentPreview.cardnewsData) return
                     setGeneratingImages(true)
+                    setEditingSlide(null)
                     const images: string[] = []
                     for (let i = 0; i < contentPreview.cardnewsData.slides.length; i++) {
                       try {
@@ -1441,10 +1622,18 @@ export function CommandPanel({ isMobile, onSwitchToOffice }: Props) {
                   disabled={generatingImages}
                   className="flex-1 text-xs py-2 bg-indigo-600 text-white rounded hover:bg-indigo-500 transition disabled:opacity-50"
                 >
-                  {generatingImages ? '⏳ 이미지 생성 중...' : '🖼️ 이미지로 만들기'}
+                  {generatingImages ? '⏳ 이미지 생성 중...' : '🖼️ 편집 완료 → 이미지 생성'}
                 </button>
               )}
-              <button onClick={() => { setContentPreview(null); setGeneratedImages([]) }}
+              {generatedImages.length > 0 && (
+                <button
+                  onClick={() => setGeneratedImages([])}
+                  className="flex-1 text-xs py-2 bg-amber-600 text-white rounded hover:bg-amber-500 transition"
+                >
+                  ✏️ 다시 편집하기
+                </button>
+              )}
+              <button onClick={() => { setContentPreview(null); setGeneratedImages([]); setEditingSlide(null) }}
                 className="px-3 text-xs py-2 bg-[#1a2a3f] text-[#6b8cbb] rounded hover:bg-[#243a55] transition">
                 닫기
               </button>

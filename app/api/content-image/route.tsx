@@ -20,6 +20,7 @@ interface Slide {
   emoji?: string
   layout?: Layout
   items?: SlideItem[]
+  imageUrl?: string
   bg?: string
   accent?: string
 }
@@ -125,7 +126,10 @@ function SlideWrapper({ children, colors, brand, index, total, hashtags }: {
 function CoverLayout({ slide, colors }: { slide: Slide; colors: ReturnType<typeof getColors> }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center' }}>
-      {slide.emoji && <div style={{ fontSize: '80px', marginBottom: '30px', display: 'flex' }}>{slide.emoji}</div>}
+      {slide.imageUrl && (
+        <img src={slide.imageUrl} style={{ width: '200px', height: '200px', borderRadius: '24px', marginBottom: '24px', objectFit: 'cover' }} />
+      )}
+      {slide.emoji && !slide.imageUrl && <div style={{ fontSize: '80px', marginBottom: '30px', display: 'flex' }}>{slide.emoji}</div>}
       <div style={{ fontSize: '54px', fontWeight: 900, color: colors.text, lineHeight: 1.3, marginBottom: '20px', display: 'flex', maxWidth: '900px' }}>
         {slide.title}
       </div>
@@ -140,17 +144,22 @@ function CoverLayout({ slide, colors }: { slide: Slide; colors: ReturnType<typeo
 
 function BasicLayout({ slide, colors }: { slide: Slide; colors: ReturnType<typeof getColors> }) {
   return (
-    <div style={{ display: 'flex', flexDirection: 'column' }}>
-      {slide.emoji && <div style={{ fontSize: '56px', marginBottom: '20px', display: 'flex' }}>{slide.emoji}</div>}
-      <div style={{ fontSize: '44px', fontWeight: 800, color: colors.text, lineHeight: 1.3, marginBottom: '24px', display: 'flex' }}>
-        {slide.title}
-      </div>
-      <div style={{ width: '80px', height: '4px', background: colors.accent, marginBottom: '24px', display: 'flex' }} />
-      {slide.body && (
-        <div style={{ fontSize: '28px', color: colors.sub, lineHeight: 1.7, display: 'flex' }}>
-          {slide.body}
-        </div>
+    <div style={{ display: 'flex', flexDirection: slide.imageUrl ? 'row' : 'column', gap: '24px', alignItems: slide.imageUrl ? 'center' : 'flex-start' }}>
+      {slide.imageUrl && (
+        <img src={slide.imageUrl} style={{ width: '280px', height: '280px', borderRadius: '16px', objectFit: 'cover', flexShrink: 0 }} />
       )}
+      <div style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
+        {slide.emoji && !slide.imageUrl && <div style={{ fontSize: '56px', marginBottom: '20px', display: 'flex' }}>{slide.emoji}</div>}
+        <div style={{ fontSize: slide.imageUrl ? '36px' : '44px', fontWeight: 800, color: colors.text, lineHeight: 1.3, marginBottom: '24px', display: 'flex' }}>
+          {slide.title}
+        </div>
+        <div style={{ width: '80px', height: '4px', background: colors.accent, marginBottom: '24px', display: 'flex' }} />
+        {slide.body && (
+          <div style={{ fontSize: slide.imageUrl ? '22px' : '28px', color: colors.sub, lineHeight: 1.7, display: 'flex' }}>
+            {slide.body}
+          </div>
+        )}
+      </div>
     </div>
   )
 }
