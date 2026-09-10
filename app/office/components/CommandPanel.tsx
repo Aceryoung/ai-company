@@ -185,6 +185,7 @@ export function CommandPanel({ isMobile, onSwitchToOffice }: Props) {
         reply: string; model?: string
         report?: { id: string; title: string } | null
         quote?: { title: string; url: string } | null
+        content?: { type: string; title: string; html: string; url: string } | null
       }
       const reply = data.reply
 
@@ -201,6 +202,12 @@ export function CommandPanel({ isMobile, onSwitchToOffice }: Props) {
       if (data.quote) {
         const q = data.quote
         addLog('sys', `💼 견적서 "${q.title}" 작성 완료! → Notion에 저장됨`)
+      }
+
+      // 콘텐츠 생성 알림
+      if (data.content) {
+        const c = data.content
+        addLog('sys', `🎨 ${c.type} "${c.title}" 생성 완료! → Notion 저장됨 [CONTENT:${c.url}]`)
       }
     } catch {
       addLog('sys', '⚠️ 응답을 받지 못했습니다.')
@@ -459,7 +466,7 @@ export function CommandPanel({ isMobile, onSwitchToOffice }: Props) {
             previousSummary: (prevResult ? `이전 작업 결과:\n${prevResult}` : '') + memoryContext,
           }),
         })
-        const data = await res.json() as { progress: string; result: string; model?: string; notionSaved?: { title: string; url: string; type: string } | null }
+        const data = await res.json() as { progress: string; result: string; model?: string; notionSaved?: { title: string; url: string; type: string } | null; content?: { type: string; title: string; html: string; url: string } | null }
 
         if (data.model === 'gemini') {
           addLog('sys', '🟡 Gemini Flash 사용')
@@ -473,6 +480,11 @@ export function CommandPanel({ isMobile, onSwitchToOffice }: Props) {
         if (data.notionSaved) {
           const ns = data.notionSaved
           addLog('sys', `📎 ${ns.type} "${ns.title}" → Notion에 실제 저장 완료!`)
+        }
+
+        // 콘텐츠 생성 알림
+        if (data.content) {
+          addLog('sys', `🎨 ${data.content.type} "${data.content.title}" 생성 완료! → Notion 저장됨`)
         }
 
         // 상태 업데이트
@@ -1013,10 +1025,11 @@ export function CommandPanel({ isMobile, onSwitchToOffice }: Props) {
               history: [],
             }),
           })
-          const data = await res.json() as { reply: string; model?: string; report?: { id: string; title: string } | null; quote?: { title: string; url: string } | null }
+          const data = await res.json() as { reply: string; model?: string; report?: { id: string; title: string } | null; quote?: { title: string; url: string } | null; content?: { type: string; title: string; html: string; url: string } | null }
           addLog('employee', `[${detectedDept}] ${leader.name}: ${data.reply}`)
           if (data.report) addLog('sys', `📄 보고서 "${data.report.title}" 작성 완료! [REPORT:${data.report.id}]`)
           if (data.quote) addLog('sys', `💼 견적서 "${data.quote.title}" 작성 완료! → Notion에 저장됨`)
+          if (data.content) addLog('sys', `🎨 ${data.content.type} "${data.content.title}" 생성 완료! → Notion 저장됨 [CONTENT:${data.content.url}]`)
         } catch {
           addLog('employee', `[${detectedDept}] ${leader.name}: 네 대표님, 확인해보겠습니다! 💪`)
         } finally {

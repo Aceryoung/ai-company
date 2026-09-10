@@ -872,6 +872,116 @@ ${conversationContext ? `이전 대화 맥락:\n${conversationContext}\n` : ''}
   return { title, url: result.url }
 }
 
+// ── 콘텐츠 생성 (카드뉴스, 뉴스레터, 블로그)
+
+const CONTENT_TYPES = {
+  cardnews: ['카드뉴스', '카드 뉴스', 'card news', '인스타 카드', '카드형'],
+  newsletter: ['뉴스레터', 'newsletter', '이메일 뉴스', '메일링'],
+  blog: ['블로그', 'blog', '블로그 글', '포스트', '아티클'],
+  sns: ['sns', 'SNS', '인스타', '트위터', '스레드', '페이스북', '소셜'],
+} as const
+
+type ContentType = keyof typeof CONTENT_TYPES
+
+function detectContentType(msg: string): ContentType | null {
+  const lower = msg.toLowerCase()
+  const createWords = ['만들', '생성', '작성', '제작', '기획', '만들어', '써줘', '작성해', '제작해']
+  if (!createWords.some(w => lower.includes(w))) return null
+
+  for (const [type, keywords] of Object.entries(CONTENT_TYPES)) {
+    if (keywords.some(k => lower.includes(k.toLowerCase()))) return type as ContentType
+  }
+  return null
+}
+
+const CONTENT_PROMPTS: Record<ContentType, string> = {
+  cardnews: `SNS 카드뉴스를 HTML로 생성하세요.
+
+규칙:
+- 5장 슬라이드 구성 (각 슬라이드 = div.slide)
+- 각 슬라이드: 제목 + 핵심 문구 (2~3줄) + 이모지/아이콘
+- 1장: 표지 (제목 + 부제)
+- 2~4장: 핵심 내용
+- 5장: CTA (팔로우/공유 유도)
+- 인스타그램 정사각형 비율 (400x400px)
+- 브랜드 컬러: #6366f1 (인디고), 배경: #f8fafc
+- 폰트: 큼직하게, 한 슬라이드에 텍스트 40자 이내
+- 하단에 해시태그 5개
+
+출력: 순수 HTML+CSS만 (설명 없이). <div class="cardnews"> 래퍼로 감싸세요.`,
+
+  newsletter: `HTML 이메일 뉴스레터를 생성하세요.
+
+규칙:
+- 이메일 호환 HTML (table 레이아웃, inline CSS)
+- 최대 너비 600px
+- 구성: 헤더(로고/제목) → 인사말 → 본문(2~3 섹션) → CTA 버튼 → 푸터
+- 깔끔한 비즈니스 톤
+- CTA 버튼: #6366f1 배경, 흰 텍스트, 둥근 모서리
+- 이미지 플레이스홀더: [이미지: 설명] 형태로
+
+출력: 순수 HTML만 (설명 없이). <!DOCTYPE> 없이 <div class="newsletter"> 래퍼로 감싸세요.`,
+
+  blog: `블로그 포스트를 Markdown으로 작성하세요.
+
+규칙:
+- 제목 (H1) + 부제
+- 도입부 (독자 관심 유발)
+- 본문 3~5개 섹션 (H2 소제목)
+- 핵심 포인트 볼드 처리
+- 실용적 팁/액션 아이템 포함
+- 결론 + CTA
+- 1000~1500자
+- SEO 키워드 자연 삽입
+
+출력: 순수 Markdown만.`,
+
+  sns: `SNS 포스팅 세트를 생성하세요.
+
+규칙:
+- 인스타그램용: 캡션 (이모지 포함, 200자) + 해시태그 10개
+- 트위터/X용: 280자 이내 트윗 3개 (스레드)
+- 링크드인용: 전문적 톤, 300자
+- 각 플랫폼별 톤 차별화
+
+출력: 플랫폼별로 구분해서 작성.`,
+}
+
+async function generateContent(
+  contentType: ContentType, topic: string, dept: string,
+  employeeName: string, role: string, context: string
+): Promise<{ type: ContentType; title: string; html: string; url: string } | null> {
+  const typeLabel = { cardnews: '카드뉴스', newsletter: '뉴스레터', blog: '블로그', sns: 'SNS 포스팅' }
+
+  const prompt = `당신은 AI 회사 "QuickBizLab"의 ${dept} 부서 ${role} "${employeeName}"입니다.
+
+대표님 요청: "${topic}"
+${context ? `참고 맥락:\n${context}\n` : ''}
+
+${CONTENT_PROMPTS[contentType]}
+
+QuickBizLab 브랜드로 작성하세요. 전문적이면서 친근한 톤.`
+
+  const { reply: content, model } = await aiChat(prompt, 45, undefined, undefined, 6000)
+  if (model === 'fallback' || !content) return null
+
+  const title = `${typeLabel[contentType]} - ${topic.slice(0, 30)}`
+
+  // Notion에 저장
+  const DEPT_EMOJI: Record<string, string> = {
+    마케팅: '📡', 기획: '📝', 콘텐츠: '📰', 비서: '📅',
+  }
+  const CONTENT_EMOJI: Record<ContentType, string> = {
+    cardnews: '🎴', newsletter: '📧', blog: '📝', sns: '📱',
+  }
+  const emoji = CONTENT_EMOJI[contentType] || DEPT_EMOJI[dept] || '📄'
+  const parentId = getDeptNotionPageId(dept) || NOTION_REPORT_PAGE_ID
+  const result = await notionCreatePage(parentId, title, content, emoji)
+  if (!result) return null
+
+  return { type: contentType, title, html: content, url: result.url }
+}
+
 export async function POST(req: NextRequest) {
   const body = await req.json() as {
     action?: string
@@ -1138,7 +1248,17 @@ ${role === '레드팀' ? '9. [레드팀] 리스크/문제점 지적 + 개선안'
       if (notionResult) notionSaved = { title, url: notionResult.url, type: '문서' }
     }
 
-    return NextResponse.json({ progress: progressLine, result: resultLine, model, notionSaved })
+    // 콘텐츠 생성 감지 (카드뉴스, 뉴스레터, 블로그, SNS)
+    let contentResult: { type: string; title: string; html: string; url: string } | null = null
+    const taskContentType = detectContentType(taskDesc)
+    if (taskContentType) {
+      contentResult = await generateContent(taskContentType, taskDesc, dept, name, role, context)
+      if (contentResult && !notionSaved) {
+        notionSaved = { title: contentResult.title, url: contentResult.url, type: contentResult.type }
+      }
+    }
+
+    return NextResponse.json({ progress: progressLine, result: resultLine, model, notionSaved, content: contentResult })
   }
 
   // 학습 추출
@@ -1366,7 +1486,17 @@ ${employeeName}:`
     quote = await generateAndSaveQuote(employeeName, dept, role, message, contextLines)
   }
 
-  return NextResponse.json({ reply, model, report, quote })
+  // 콘텐츠 생성 감지 (카드뉴스, 뉴스레터, 블로그, SNS)
+  let content: { type: string; title: string; html: string; url: string } | null = null
+  const contentType = detectContentType(message)
+  if (contentType) {
+    const contextLines = (history ?? []).slice(-4).map(m =>
+      m.role === 'user' ? `대표님: ${m.content}` : `${employeeName}: ${m.content}`
+    ).join('\n')
+    content = await generateContent(contentType, message, dept, employeeName, role, contextLines)
+  }
+
+  return NextResponse.json({ reply, model, report, quote, content })
 }
 
 function getRuleBasedReply(name: string, dept: string, role: string, speech: string, message: string): string {
