@@ -895,20 +895,18 @@ function detectContentType(msg: string): ContentType | null {
 }
 
 const CONTENT_PROMPTS: Record<ContentType, string> = {
-  cardnews: `SNS 카드뉴스를 HTML로 생성하세요.
+  cardnews: `SNS 카드뉴스를 JSON으로 생성하세요.
 
 규칙:
-- 5장 슬라이드 구성 (각 슬라이드 = div.slide)
-- 각 슬라이드: 제목 + 핵심 문구 (2~3줄) + 이모지/아이콘
-- 1장: 표지 (제목 + 부제)
-- 2~4장: 핵심 내용
+- 5장 슬라이드 구성
+- 1장: 표지 (임팩트 있는 제목 + 부제)
+- 2~4장: 핵심 내용 (한 슬라이드에 제목 15자, 본문 40자 이내)
 - 5장: CTA (팔로우/공유 유도)
-- 인스타그램 정사각형 비율 (400x400px)
-- 브랜드 컬러: #6366f1 (인디고), 배경: #f8fafc
-- 폰트: 큼직하게, 한 슬라이드에 텍스트 40자 이내
-- 하단에 해시태그 5개
+- 각 슬라이드에 어울리는 이모지 1개
+- 해시태그 5개
 
-출력: 순수 HTML+CSS만 (설명 없이). <div class="cardnews"> 래퍼로 감싸세요.`,
+출력: 순수 JSON만 (설명 없이, 코드블록 없이):
+{"slides":[{"title":"제목","body":"본문","emoji":"🚀"}],"hashtags":["키워드1","키워드2"]}`,
 
   newsletter: `HTML 이메일 뉴스레터를 생성하세요.
 
@@ -947,10 +945,19 @@ const CONTENT_PROMPTS: Record<ContentType, string> = {
 출력: 플랫폼별로 구분해서 작성.`,
 }
 
+interface ContentResult {
+  type: string
+  title: string
+  html: string
+  url: string
+  cardnewsData?: { slides: Array<{ title: string; body: string; emoji?: string }>; hashtags?: string[] }
+  imageReady?: boolean
+}
+
 async function generateContent(
   contentType: ContentType, topic: string, dept: string,
   employeeName: string, role: string, context: string
-): Promise<{ type: ContentType; title: string; html: string; url: string } | null> {
+): Promise<ContentResult | null> {
   const typeLabel = { cardnews: '카드뉴스', newsletter: '뉴스레터', blog: '블로그', sns: 'SNS 포스팅' }
 
   const prompt = `당신은 AI 회사 "QuickBizLab"의 ${dept} 부서 ${role} "${employeeName}"입니다.
@@ -967,19 +974,41 @@ QuickBizLab 브랜드로 작성하세요. 전문적이면서 친근한 톤.`
 
   const title = `${typeLabel[contentType]} - ${topic.slice(0, 30)}`
 
-  // Notion에 저장
-  const DEPT_EMOJI: Record<string, string> = {
-    마케팅: '📡', 기획: '📝', 콘텐츠: '📰', 비서: '📅',
+  // 카드뉴스: JSON 파싱 → 구조화 데이터 포함
+  let cardnewsData: ContentResult['cardnewsData'] = undefined
+  let notionContent = content
+  if (contentType === 'cardnews') {
+    try {
+      const jsonStr = content.replace(/```json?\n?/g, '').replace(/```/g, '').trim()
+      const parsed = JSON.parse(jsonStr) as { slides: Array<{ title: string; body: string; emoji?: string }>; hashtags?: string[] }
+      cardnewsData = parsed
+      // Notion용 마크다운 변환
+      notionContent = parsed.slides.map((s, i) =>
+        `## 슬라이드 ${i + 1} ${s.emoji || ''}\n**${s.title}**\n${s.body}`
+      ).join('\n\n') + (parsed.hashtags ? `\n\n---\n${parsed.hashtags.map(t => `#${t}`).join(' ')}` : '')
+    } catch {
+      // JSON 파싱 실패 → 텍스트 그대로 사용
+      console.log('[content] cardnews JSON 파싱 실패, 텍스트 사용')
+    }
   }
+
+  // Notion에 저장
   const CONTENT_EMOJI: Record<ContentType, string> = {
     cardnews: '🎴', newsletter: '📧', blog: '📝', sns: '📱',
   }
-  const emoji = CONTENT_EMOJI[contentType] || DEPT_EMOJI[dept] || '📄'
+  const emoji = CONTENT_EMOJI[contentType] || '📄'
   const parentId = getDeptNotionPageId(dept) || NOTION_REPORT_PAGE_ID
-  const result = await notionCreatePage(parentId, title, content, emoji)
+  const result = await notionCreatePage(parentId, title, notionContent, emoji)
   if (!result) return null
 
-  return { type: contentType, title, html: content, url: result.url }
+  return {
+    type: typeLabel[contentType],
+    title,
+    html: contentType === 'cardnews' ? notionContent : content,
+    url: result.url,
+    cardnewsData,
+    imageReady: !!cardnewsData,
+  }
 }
 
 export async function POST(req: NextRequest) {
