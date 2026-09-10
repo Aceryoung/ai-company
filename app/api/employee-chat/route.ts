@@ -895,18 +895,26 @@ function detectContentType(msg: string): ContentType | null {
 }
 
 const CONTENT_PROMPTS: Record<ContentType, string> = {
-  cardnews: `SNS 카드뉴스를 JSON으로 생성하세요.
+  cardnews: `SNS 카드뉴스를 JSON으로 생성하세요. 1080x1350 (4:5) 인스타그램 캐러셀.
 
 규칙:
-- 5장 슬라이드 구성
-- 1장: 표지 (임팩트 있는 제목 + 부제)
-- 2~4장: 핵심 내용 (한 슬라이드에 제목 15자, 본문 40자 이내)
-- 5장: CTA (팔로우/공유 유도)
+- 10장 슬라이드 구성
+- 1장: cover (임팩트 있는 제목 + 부제)
+- 2~9장: 핵심 내용 — 아래 7종 레이아웃을 주제에 맞게 다양하게 배치
+  - basic: 제목 + 본문 (기본)
+  - stats: 핵심 수치 강조 (items에 label/value 쌍)
+  - checklist: 체크리스트 (items에 label, checked: true/false)
+  - comparison: A vs B 비교 (items 짝수 인덱스=A, 홀수=B)
+  - timeline: 시간순 흐름 (items에 label, date, value)
+  - table: 표 형식 (items 첫번째=헤더, 나머지=행, label/value)
+  - quote: 인용/명언 (title=인용문, body=출처)
+- 10장: cta (팔로우/공유 유도)
+- 같은 레이아웃 연속 2번 사용 금지 — 반드시 다양하게
 - 각 슬라이드에 어울리는 이모지 1개
 - 해시태그 5개
 
 출력: 순수 JSON만 (설명 없이, 코드블록 없이):
-{"slides":[{"title":"제목","body":"본문","emoji":"🚀"}],"hashtags":["키워드1","키워드2"]}`,
+{"slides":[{"title":"제목","body":"본문","emoji":"🚀","layout":"basic"},{"title":"핵심 지표","emoji":"📊","layout":"stats","items":[{"label":"매출","value":"120억"},{"label":"성장률","value":"+35%"}]},{"title":"체크리스트","emoji":"✅","layout":"checklist","items":[{"label":"항목1","checked":true},{"label":"항목2","checked":false}]}],"hashtags":["키워드1","키워드2"]}`,
 
   newsletter: `HTML 이메일 뉴스레터를 생성하세요.
 

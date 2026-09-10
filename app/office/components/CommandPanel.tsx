@@ -77,7 +77,7 @@ export function CommandPanel({ isMobile, onSwitchToOffice }: Props) {
   } | null>(null)
   const [contentPreview, setContentPreview] = useState<{
     type: string; title: string; html: string; url: string
-    cardnewsData?: { slides: Array<{ title: string; body: string; emoji?: string }>; hashtags?: string[] }
+    cardnewsData?: { slides: Array<{ title: string; body: string; emoji?: string; layout?: string; items?: Array<{ label: string; value?: string; checked?: boolean; date?: string }> }>; hashtags?: string[] }
     imageReady?: boolean
   } | null>(null)
   const [generatingImages, setGeneratingImages] = useState(false)
@@ -213,7 +213,7 @@ export function CommandPanel({ isMobile, onSwitchToOffice }: Props) {
 
       // 콘텐츠 생성 → 미리보기 표시
       if (data.content) {
-        const c = data.content as { type: string; title: string; html: string; url: string; cardnewsData?: { slides: Array<{ title: string; body: string; emoji?: string }>; hashtags?: string[] }; imageReady?: boolean }
+        const c = data.content as { type: string; title: string; html: string; url: string; cardnewsData?: { slides: Array<{ title: string; body: string; emoji?: string; layout?: string; items?: Array<{ label: string; value?: string; checked?: boolean; date?: string }> }>; hashtags?: string[] }; imageReady?: boolean }
         addLog('sys', `🎨 ${c.type} "${c.title}" 생성 완료! → Notion 저장됨`)
         addLog('sys', `👀 미리보기를 열고 있습니다...`)
         setContentPreview(c)
@@ -1357,11 +1357,27 @@ export function CommandPanel({ isMobile, onSwitchToOffice }: Props) {
               {contentPreview.cardnewsData ? (
                 <div className="space-y-3">
                   {contentPreview.cardnewsData.slides.map((slide, i) => (
-                    <div key={i} className={`rounded-lg p-4 ${i === 0 ? 'bg-indigo-600 text-white' : 'bg-[#1a2a3f] text-[#e2e8f0]'}`}>
-                      <div className="text-[10px] text-[#94a3b8] mb-1">슬라이드 {i + 1}/{contentPreview.cardnewsData!.slides.length}</div>
+                    <div key={i} className={`rounded-lg p-4 ${i === 0 ? 'bg-indigo-600 text-white' : i === contentPreview.cardnewsData!.slides.length - 1 ? 'bg-purple-700 text-white' : 'bg-[#1a2a3f] text-[#e2e8f0]'}`} style={{ aspectRatio: '4/5' }}>
+                      <div className="flex justify-between items-center mb-1">
+                        <div className="text-[10px] text-[#94a3b8]">슬라이드 {i + 1}/{contentPreview.cardnewsData!.slides.length}</div>
+                        {slide.layout && <div className="text-[9px] px-1.5 py-0.5 rounded bg-[#2a3a5f] text-[#6b8cbb]">{slide.layout}</div>}
+                      </div>
                       {slide.emoji && <div className="text-2xl mb-1">{slide.emoji}</div>}
-                      <div className={`font-bold text-sm mb-1 ${i === 0 ? 'text-white' : 'text-[#4af]'}`}>{slide.title}</div>
-                      <div className="text-xs leading-relaxed">{slide.body}</div>
+                      <div className={`font-bold text-sm mb-1 ${i === 0 || i === contentPreview.cardnewsData!.slides.length - 1 ? 'text-white' : 'text-[#4af]'}`}>{slide.title}</div>
+                      {slide.body && <div className="text-xs leading-relaxed">{slide.body}</div>}
+                      {slide.items && slide.items.length > 0 && (
+                        <div className="mt-2 space-y-1">
+                          {slide.items.slice(0, 4).map((item, j) => (
+                            <div key={j} className="text-[10px] text-[#94a3b8] flex gap-1">
+                              {slide.layout === 'checklist' && <span>{item.checked ? '✅' : '⬜'}</span>}
+                              {item.date && <span className="text-[#6b8cbb]">{item.date}</span>}
+                              <span>{item.label}</span>
+                              {item.value && <span className="ml-auto text-[#4af]">{item.value}</span>}
+                            </div>
+                          ))}
+                          {slide.items.length > 4 && <div className="text-[9px] text-[#6b8cbb]">+{slide.items.length - 4}개 더...</div>}
+                        </div>
+                      )}
                     </div>
                   ))}
                   {contentPreview.cardnewsData.hashtags && (
