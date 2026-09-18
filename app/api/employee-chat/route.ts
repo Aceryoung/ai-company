@@ -898,9 +898,9 @@ const CONTENT_PROMPTS: Record<ContentType, string> = {
   cardnews: `SNS 카드뉴스를 JSON으로 생성하세요. 1080x1350 (4:5) 인스타그램 캐러셀.
 
 규칙:
-- 10장 슬라이드 구성
-- 1장: cover (임팩트 있는 제목 + 부제)
-- 2~9장: 핵심 내용 — 아래 7종 레이아웃을 주제에 맞게 다양하게 배치
+- 슬라이드 수: 콘텐츠 양에 맞게 5~15장 자유 결정 (억지로 늘리거나 줄이지 말 것)
+- 첫 장: cover (임팩트 있는 제목 + 부제)
+- 중간: 핵심 내용 — 아래 7종 레이아웃을 주제에 맞게 다양하게 배치
   - basic: 제목 + 본문 (기본)
   - stats: 핵심 수치 강조 (items에 label/value 쌍)
   - checklist: 체크리스트 (items에 label, checked: true/false)
@@ -908,7 +908,7 @@ const CONTENT_PROMPTS: Record<ContentType, string> = {
   - timeline: 시간순 흐름 (items에 label, date, value)
   - table: 표 형식 (items 첫번째=헤더, 나머지=행, label/value)
   - quote: 인용/명언 (title=인용문, body=출처)
-- 10장: cta (팔로우/공유 유도)
+- 마지막 장: cta (팔로우/공유 유도)
 - 같은 레이아웃 연속 2번 사용 금지 — 반드시 다양하게
 - 각 슬라이드에 어울리는 이모지 1개
 - 해시태그 5개
