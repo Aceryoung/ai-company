@@ -958,6 +958,7 @@ interface ContentResult {
   title: string
   html: string
   url: string
+  notionPageId?: string
   cardnewsData?: { slides: Array<{ title: string; body: string; emoji?: string }>; hashtags?: string[] }
   imageReady?: boolean
 }
@@ -1014,6 +1015,7 @@ QuickBizLab 브랜드로 작성하세요. 전문적이면서 친근한 톤.`
     title,
     html: contentType === 'cardnews' ? notionContent : content,
     url: result.url,
+    notionPageId: result.id,
     cardnewsData,
     imageReady: !!cardnewsData,
   }

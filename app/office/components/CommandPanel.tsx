@@ -76,7 +76,7 @@ export function CommandPanel({ isMobile, onSwitchToOffice }: Props) {
     id: string; title: string; content: string; employee_name: string; dept: string; created_at: string
   } | null>(null)
   const [contentPreview, setContentPreview] = useState<{
-    type: string; title: string; html: string; url: string
+    type: string; title: string; html: string; url: string; notionPageId?: string
     cardnewsData?: { slides: Array<{ title: string; body: string; emoji?: string; layout?: string; imageUrl?: string; items?: Array<{ label: string; value?: string; checked?: boolean; date?: string }> }>; hashtags?: string[] }
     imageReady?: boolean
   } | null>(null)
@@ -269,7 +269,11 @@ export function CommandPanel({ isMobile, onSwitchToOffice }: Props) {
 
       // 콘텐츠 생성 → 미리보기 표시
       if (data.content) {
-        const c = data.content as { type: string; title: string; html: string; url: string; cardnewsData?: { slides: Array<{ title: string; body: string; emoji?: string; layout?: string; items?: Array<{ label: string; value?: string; checked?: boolean; date?: string }> }>; hashtags?: string[] }; imageReady?: boolean }
+        const c = data.content as {
+          type: string; title: string; html: string; url: string; notionPageId?: string
+          cardnewsData?: { slides: Array<{ title: string; body: string; emoji?: string; layout?: string; items?: Array<{ label: string; value?: string; checked?: boolean; date?: string }> }>; hashtags?: string[] }
+          imageReady?: boolean
+        }
         addLog('sys', `🎨 ${c.type} "${c.title}" 생성 완료! → Notion 저장됨`)
         addLog('sys', `👀 미리보기를 열고 있습니다...`)
         setContentPreview(c)
@@ -1597,7 +1601,11 @@ export function CommandPanel({ isMobile, onSwitchToOffice }: Props) {
                     if (!contentPreview.cardnewsData) return
                     setGeneratingImages(true)
                     setEditingSlide(null)
-                    const images: string[] = []
+                    const imageBlobs: Blob[] = []
+                    const imageUrls: string[] = []
+
+                    // 1. 이미지 생성
+                    addLog('sys', `🎨 이미지 생성 중... (${contentPreview.cardnewsData.slides.length}장)`)
                     for (let i = 0; i < contentPreview.cardnewsData.slides.length; i++) {
                       try {
                         const res = await fetch('/api/content-image', {
@@ -1611,13 +1619,38 @@ export function CommandPanel({ isMobile, onSwitchToOffice }: Props) {
                         })
                         if (res.ok) {
                           const blob = await res.blob()
-                          images.push(URL.createObjectURL(blob))
+                          imageBlobs.push(blob)
+                          imageUrls.push(URL.createObjectURL(blob))
                         }
                       } catch { /* skip */ }
                     }
-                    setGeneratedImages(images)
+                    setGeneratedImages(imageUrls)
+
+                    // 2. Supabase + Notion 업로드
+                    if (imageBlobs.length > 0) {
+                      addLog('sys', `☁️ Supabase 업로드 + Notion 저장 중...`)
+                      try {
+                        const formData = new FormData()
+                        if (contentPreview.notionPageId) {
+                          formData.append('notionPageId', contentPreview.notionPageId)
+                        }
+                        imageBlobs.forEach((blob, i) => {
+                          formData.append('images', new File([blob], `slide_${i + 1}.png`, { type: 'image/png' }))
+                        })
+                        const uploadRes = await fetch('/api/upload-cardnews', { method: 'POST', body: formData })
+                        if (uploadRes.ok) {
+                          const result = await uploadRes.json()
+                          addLog('sys', `✅ 이미지 ${result.count}장 저장 완료!${result.notionUpdated ? ' → Notion에 이미지 추가됨' : ''}`)
+                        } else {
+                          addLog('sys', `⚠️ 업로드 실패: ${(await uploadRes.json()).error}`)
+                        }
+                      } catch (e) {
+                        addLog('sys', `⚠️ 업로드 오류: ${e}`)
+                      }
+                    }
+
                     setGeneratingImages(false)
-                    addLog('sys', `🖼️ 카드뉴스 이미지 ${images.length}장 생성 완료!`)
+                    addLog('sys', `🖼️ 카드뉴스 이미지 ${imageUrls.length}장 생성 완료!`)
                   }}
                   disabled={generatingImages}
                   className="flex-1 text-xs py-2 bg-indigo-600 text-white rounded hover:bg-indigo-500 transition disabled:opacity-50"
