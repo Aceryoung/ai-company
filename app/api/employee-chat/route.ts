@@ -1095,30 +1095,44 @@ function detectContentType(msg: string): ContentType | null {
 const CONTENT_PROMPTS: Record<ContentType, string> = {
   cardnews: `SNS 카드뉴스를 JSON으로 생성하세요. 1080x1350 (4:5) 인스타그램 캐러셀.
 
-톤: 후킹형 — 질문형/도발형 카피로 호기심 자극. "~하고 계신가요?", "~없이 어떻게?" 등.
+톤: 후킹형 — 질문형/도발형 카피로 호기심 자극.
 
-■ 글자수 제한 (엄격히 준수 — 초과하면 카드가 깨집니다):
-- title: 최대 15자 (강조 **별표** 제외)
+■ 글자수 제한 (엄격 — 초과 시 카드 깨짐):
+- title: 최대 15자 (**별표** 제외)
 - kicker: 최대 20자
-- body/sub: 최대 60자 (1~2문장)
-- items의 label(head): 최대 12자
-- items의 value(body): 최대 50자 (1문장)
+- body/sub: 최대 60자
+- items의 head: 최대 12자
+- items의 body: 최대 50자
 - quote: 최대 80자
-- number(value): 숫자+단위만 (예: "50K+", "90%")
+- number: 숫자+단위만 (예: "50K+")
 - desc: 최대 60자
 - cta: 최대 8자
-- stat의 title(kicker): 최대 8자
 
-■ 레이아웃 규칙:
-- 슬라이드 수: 7~10장
-- 첫 장: cover (후킹 제목 + 짧은 부제). imageKeyword 필수. kicker에 프로젝트명
-- 중간 5종 레이아웃 다양하게:
-  - list: 제목 + items 3개. head=소제목, body=한 문장 설명
-  - stat: kicker=카테고리, number=숫자, desc=한 문장 설명
-  - quote: 인용문 + title=출처
-  - table: items 4~5개 (head/body 쌍)
-  - photo: 짧은 제목+부제. imageKeyword 필수
-- 마지막: outro (CTA 포함)
+■ AUTO 레이아웃 — 콘텐츠 기반 자동 선택:
+README/URL 내용을 분석해서 가장 적합한 레이아웃을 자동 선택하세요.
+
+사용 가능 레이아웃 6종:
+- cover: 첫 장 전용. 후킹 제목 + 부제. imageKeyword 필수
+- list: 기능/특징 나열 시. items 3개 (head + body)
+- stat: 구체적 수치가 있을 때만. kicker + number + desc
+- quote: 핵심 메시지/슬로건. quote + title(출처)
+- table: 비교 대상이 있을 때만. items 4~5개 (head/body 쌍)
+- photo: 비주얼 강조. 짧은 title + sub. imageKeyword 필수
+- outro: 마지막 장. CTA 포함
+
+선택 기준:
+- README에 Star/다운로드 등 수치 있으면 → stat
+- 경쟁 제품/대안과 비교 가능하면 → table
+- 핵심 기능 3개 이상 → list
+- 인상적인 한 줄 문구 → quote
+- 설치/사용법 → list (단계별)
+- 수치 없으면 stat 쓰지 마세요. 비교 대상 없으면 table 쓰지 마세요
+- 내용에 맞는 레이아웃만 사용. 억지로 다 쓸 필요 없음
+
+규칙:
+- 슬라이드 7~10장
+- 첫 장: 반드시 cover
+- 마지막: 반드시 outro
 - 같은 레이아웃 연속 금지
 - photo 최소 1장
 - title 강조: **별표** 감싸기
@@ -1127,7 +1141,7 @@ const CONTENT_PROMPTS: Record<ContentType, string> = {
 - 해시태그 5개
 
 출력: 순수 JSON만 (설명/코드블록 없이):
-{"slides":[{"layout":"cover","kicker":"REA","title":"**소스 코드** 없이 분석?","sub":"바이너리부터 웹까지 한번에","imageKeyword":"code analysis"},{"layout":"list","title":"핵심 기능","items":[{"head":"소스 불필요","body":"실제 동작 기반으로 분석합니다"},{"head":"로컬 실행","body":"보안 걱정 없이 안전하게"},{"head":"AI 연동","body":"한 줄로 에이전트 등록"}]},{"layout":"stat","kicker":"성장 지표","title":"","number":"250K+","desc":"글로벌 개발자 커뮤니티 스타"},{"layout":"table","title":"차원이 다른 비교","items":[{"head":"실행 환경","body":"로컬 PC 직접 실행"},{"head":"용량 제한","body":"제한 없음"},{"head":"인터넷","body":"오프라인 가능"}]},{"layout":"quote","quote":"터미널 하나로 반복 업무 90% 자동화","title":"실제 활용"},{"layout":"photo","title":"자동화의 혁신","sub":"누구나 쉽게 시작하는 AI 도구","imageKeyword":"developer workspace"},{"layout":"outro","title":"지금 바로 **도전**","sub":"터미널 열고 시작하세요","cta":"시작하기"}],"hashtags":["개발자도구","자동화","AI","오픈소스","프로그래밍"]}`,
+{"slides":[{"layout":"cover","kicker":"프로젝트명","title":"**핵심 키워드** 후킹 제목","sub":"짧은 부제","imageKeyword":"keyword"},{"layout":"list","title":"핵심 기능","items":[{"head":"기능1","body":"한 문장 설명"},{"head":"기능2","body":"한 문장 설명"},{"head":"기능3","body":"한 문장 설명"}]},{"layout":"stat","kicker":"지표","number":"50K+","desc":"수치 설명"},{"layout":"photo","title":"비주얼 제목","sub":"짧은 설명","imageKeyword":"keyword"},{"layout":"outro","title":"행동 유도","sub":"마무리","cta":"시작하기"}],"hashtags":["태그1","태그2","태그3","태그4","태그5"]}`,
 
   newsletter: `HTML 이메일 뉴스레터를 생성하세요.
 
