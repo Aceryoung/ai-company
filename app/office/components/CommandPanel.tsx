@@ -6,6 +6,8 @@ import { useOfficeStore } from '../store/officeStore'
 import { EMPLOYEES, DEPT_SKILLS, DEPT_COLORS, getEmployeesByDept } from '../data/employees'
 import type { Employee, AutonomousTask, TaskStep, SwarmPhase } from '../store/officeStore'
 import { useUsageTracker } from '../hooks/useUsageTracker'
+import { CardNewsCanvas, captureAllCards, CARD_TEMPLATES } from './CardNewsCanvas'
+import type { CardTemplate, CardDeck, CardSlide, CardLayout } from './CardNewsCanvas'
 
 const QUICK_CMDS = ['현황 보고', '왜 늦어져?', '회의 소집', '레포 현황', '승인할게', '집중 모드']
 
@@ -83,6 +85,10 @@ export function CommandPanel({ isMobile, onSwitchToOffice }: Props) {
   const [generatingImages, setGeneratingImages] = useState(false)
   const [generatedImages, setGeneratedImages] = useState<string[]>([])
   const [editingSlide, setEditingSlide] = useState<number | null>(null)
+  const [cardTemplate, setCardTemplate] = useState<CardTemplate>('clean')
+  const [cardRatio, setCardRatio] = useState<'1:1' | '4:5'>('4:5')
+  const [publishToSns, setPublishToSns] = useState(false)
+  const [snsScheduledAt, setSnsScheduledAt] = useState('')
 
   // 슬라이드 편집 헬퍼
   const updateSlide = (index: number, patch: Record<string, unknown>) => {
@@ -107,7 +113,7 @@ export function CommandPanel({ isMobile, onSwitchToOffice }: Props) {
   }
   const addSlide = () => {
     if (!contentPreview?.cardnewsData) return
-    const slides = [...contentPreview.cardnewsData.slides, { title: '새 슬라이드', body: '', emoji: '✨', layout: 'basic' }]
+    const slides = [...contentPreview.cardnewsData.slides, { title: '새 슬라이드', body: '', emoji: '✨', layout: 'list' }]
     setContentPreview({ ...contentPreview, cardnewsData: { ...contentPreview.cardnewsData, slides } })
     setEditingSlide(slides.length - 1)
   }
@@ -139,6 +145,32 @@ export function CommandPanel({ isMobile, onSwitchToOffice }: Props) {
     setContentPreview({ ...contentPreview, cardnewsData: { ...contentPreview.cardnewsData, slides } })
   }
   const logRef = useRef<HTMLDivElement>(null)
+
+  // AI 데이터 → CardDeck 변환
+  const convertToDeck = useCallback((data: NonNullable<typeof contentPreview>['cardnewsData']): CardDeck => {
+    if (!data) return { slides: [] }
+    const layoutMap: Record<string, CardLayout> = {
+      cover: 'cover', list: 'list', basic: 'list', quote: 'quote',
+      stat: 'stat', stats: 'stat', table: 'table', photo: 'photo',
+      outro: 'outro', cta: 'outro', checklist: 'list', comparison: 'list', timeline: 'list',
+    }
+    return {
+      brand: 'QuickBizLab',
+      tags: data.hashtags?.map(h => `#${h}`).join(' ') || '',
+      slides: data.slides.map(s => ({
+        layout: layoutMap[s.layout || 'list'] || 'list',
+        title: s.title,
+        sub: s.body || undefined,
+        kicker: s.emoji || undefined,
+        quote: s.layout === 'quote' ? s.body : undefined,
+        number: s.layout === 'stat' || s.layout === 'stats' ? s.items?.[0]?.value : undefined,
+        desc: s.layout === 'stat' || s.layout === 'stats' ? s.items?.[0]?.label : undefined,
+        cta: s.layout === 'cta' || s.layout === 'outro' ? (s.body || '자세히 보기') : undefined,
+        imageUrl: s.imageUrl || undefined,
+        items: s.items?.map(it => ({ head: it.label, body: it.value || '' })),
+      })),
+    }
+  }, [])
 
   // 마운트 후 localStorage 복원
   useEffect(() => {
@@ -1421,6 +1453,27 @@ export function CommandPanel({ isMobile, onSwitchToOffice }: Props) {
             <div className="flex-1 overflow-y-auto p-4">
               {contentPreview.cardnewsData ? (
                 <div className="space-y-3">
+                  {/* 카드뉴스 실시간 프리뷰 */}
+                  {generatedImages.length === 0 && (
+                    <div className="mb-3 p-3 bg-[#0a1525] rounded-lg border border-[#1e3a5f]">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-[10px] text-[#6b8cbb] font-bold">프리뷰</span>
+                        <div className="flex gap-1">
+                          <button onClick={() => setCardRatio(cardRatio === '1:1' ? '4:5' : '1:1')}
+                            className="text-[9px] px-2 py-0.5 bg-[#1a2a3f] text-[#6b8cbb] rounded hover:bg-[#243a55]">
+                            {cardRatio}
+                          </button>
+                        </div>
+                      </div>
+                      <CardNewsCanvas
+                        deck={convertToDeck(contentPreview.cardnewsData)}
+                        template={cardTemplate}
+                        ratio={cardRatio}
+                        onTemplateChange={setCardTemplate}
+                      />
+                    </div>
+                  )}
+
                   {contentPreview.cardnewsData.slides.map((slide, i) => (
                     <div key={i} className={`rounded-lg border-2 transition-all ${editingSlide === i ? 'border-[#4af]' : 'border-transparent hover:border-[#1e3a5f]'}`}>
                       {/* 슬라이드 카드 — 클릭으로 편집 토글 */}
@@ -1498,7 +1551,7 @@ export function CommandPanel({ isMobile, onSwitchToOffice }: Props) {
                           {/* 레이아웃 선택 */}
                           <div className="flex gap-1 flex-wrap">
                             <span className="text-[10px] text-[#6b8cbb] self-center mr-1">레이아웃:</span>
-                            {['cover', 'basic', 'stats', 'checklist', 'comparison', 'timeline', 'table', 'quote', 'cta'].map(l => (
+                            {['cover', 'list', 'quote', 'stat', 'table', 'photo', 'outro'].map(l => (
                               <button
                                 key={l}
                                 onClick={() => updateSlide(i, { layout: l })}
@@ -1507,8 +1560,8 @@ export function CommandPanel({ isMobile, onSwitchToOffice }: Props) {
                             ))}
                           </div>
 
-                          {/* Items 편집 (stats/checklist/comparison/timeline/table) */}
-                          {['stats', 'checklist', 'comparison', 'timeline', 'table'].includes(slide.layout || '') && (
+                          {/* Items 편집 (list/table) */}
+                          {['list', 'table'].includes(slide.layout || '') && (
                             <div className="space-y-1">
                               <div className="flex items-center justify-between">
                                 <span className="text-[10px] text-[#6b8cbb]">📋 항목 ({slide.items?.length || 0})</span>
@@ -1589,6 +1642,20 @@ export function CommandPanel({ isMobile, onSwitchToOffice }: Props) {
               )}
             </div>
 
+            {/* SNS 발행 옵션 */}
+            <div className="flex items-center gap-3 px-4 py-2 border-t border-[#1e3a5f]">
+              <label className="flex items-center gap-1.5 text-xs text-[#8ba4c4] cursor-pointer">
+                <input type="checkbox" checked={publishToSns} onChange={e => setPublishToSns(e.target.checked)}
+                  className="accent-indigo-500" />
+                SNS 동시 발행
+              </label>
+              {publishToSns && (
+                <input type="datetime-local" value={snsScheduledAt} onChange={e => setSnsScheduledAt(e.target.value)}
+                  className="text-xs bg-[#0d1b2a] text-[#8ba4c4] border border-[#1e3a5f] rounded px-2 py-1"
+                  placeholder="예약 시간 (비우면 즉시)" />
+              )}
+            </div>
+
             {/* 하단 버튼 */}
             <div className="flex gap-2 px-4 py-3 border-t border-[#1e3a5f]">
               <a href={contentPreview.url} target="_blank" rel="noopener noreferrer"
@@ -1601,56 +1668,53 @@ export function CommandPanel({ isMobile, onSwitchToOffice }: Props) {
                     if (!contentPreview.cardnewsData) return
                     setGeneratingImages(true)
                     setEditingSlide(null)
-                    const imageBlobs: Blob[] = []
-                    const imageUrls: string[] = []
 
-                    // 1. 이미지 생성
-                    addLog('sys', `🎨 이미지 생성 중... (${contentPreview.cardnewsData.slides.length}장)`)
-                    for (let i = 0; i < contentPreview.cardnewsData.slides.length; i++) {
-                      try {
-                        const res = await fetch('/api/content-image', {
-                          method: 'POST',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({
-                            type: 'cardnews',
-                            slideIndex: i,
-                            data: { brand: 'QuickBizLab', ...contentPreview.cardnewsData },
-                          }),
-                        })
-                        if (res.ok) {
-                          const blob = await res.blob()
-                          imageBlobs.push(blob)
-                          imageUrls.push(URL.createObjectURL(blob))
-                        }
-                      } catch { /* skip */ }
-                    }
-                    setGeneratedImages(imageUrls)
+                    const deck = convertToDeck(contentPreview.cardnewsData)
+                    addLog('sys', `🎨 이미지 생성 중... (${deck.slides.length}장, 템플릿: ${cardTemplate})`)
 
-                    // 2. Supabase + Notion 업로드
-                    if (imageBlobs.length > 0) {
-                      addLog('sys', `☁️ Supabase 업로드 + Notion 저장 중...`)
-                      try {
+                    try {
+                      const imageBlobs = await captureAllCards(deck, cardTemplate, cardRatio)
+                      const imageUrls = imageBlobs.map(b => URL.createObjectURL(b))
+                      setGeneratedImages(imageUrls)
+
+                      if (imageBlobs.length > 0) {
+                        addLog('sys', `☁️ Supabase 업로드 + Notion 저장 중...`)
                         const formData = new FormData()
                         if (contentPreview.notionPageId) {
                           formData.append('notionPageId', contentPreview.notionPageId)
                         }
-                        imageBlobs.forEach((blob, i) => {
-                          formData.append('images', new File([blob], `slide_${i + 1}.png`, { type: 'image/png' }))
+                        imageBlobs.forEach((blob, idx) => {
+                          formData.append('images', new File([blob], `slide_${idx + 1}.png`, { type: 'image/png' }))
                         })
+                        if (publishToSns) {
+                          formData.append('publishToSns', 'true')
+                          const caption = contentPreview.cardnewsData?.slides?.[0]?.title || '카드뉴스'
+                          formData.append('snsCaption', caption)
+                          if (snsScheduledAt) formData.append('snsScheduledAt', snsScheduledAt)
+                          const tags = (contentPreview.cardnewsData as Record<string, unknown>)?.hashtags
+                          if (Array.isArray(tags)) formData.append('snsHashtags', tags.join(','))
+                        }
                         const uploadRes = await fetch('/api/upload-cardnews', { method: 'POST', body: formData })
                         if (uploadRes.ok) {
-                          const result = await uploadRes.json()
+                          const result = await uploadRes.json() as { count: number; notionUpdated: boolean; sns?: { success: boolean; postId?: string; error?: string; accounts?: string[] } }
                           addLog('sys', `✅ 이미지 ${result.count}장 저장 완료!${result.notionUpdated ? ' → Notion에 이미지 추가됨' : ''}`)
+                          if (result.sns) {
+                            if (result.sns.success) {
+                              addLog('sys', `📱 SNS 발행 완료! (${result.sns.accounts?.join(', ')})${snsScheduledAt ? ' — 예약됨' : ''}`)
+                            } else {
+                              addLog('sys', `⚠️ SNS 발행 실패: ${result.sns.error}`)
+                            }
+                          }
                         } else {
-                          addLog('sys', `⚠️ 업로드 실패: ${(await uploadRes.json()).error}`)
+                          addLog('sys', `⚠️ 업로드 실패: ${((await uploadRes.json()) as { error: string }).error}`)
                         }
-                      } catch (e) {
-                        addLog('sys', `⚠️ 업로드 오류: ${e}`)
                       }
-                    }
 
+                      addLog('sys', `🖼️ 카드뉴스 이미지 ${imageUrls.length}장 생성 완료!`)
+                    } catch (e) {
+                      addLog('sys', `⚠️ 이미지 생성 오류: ${e}`)
+                    }
                     setGeneratingImages(false)
-                    addLog('sys', `🖼️ 카드뉴스 이미지 ${imageUrls.length}장 생성 완료!`)
                   }}
                   disabled={generatingImages}
                   className="flex-1 text-xs py-2 bg-indigo-600 text-white rounded hover:bg-indigo-500 transition disabled:opacity-50"

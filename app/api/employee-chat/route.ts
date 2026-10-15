@@ -263,8 +263,153 @@ function getDeptNotionPageId(dept: string): string {
 
 // ── URL 내용 가져오기 (직원에게 링크 분석 요청 시)
 const URL_REGEX = /https?:\/\/[^\s<>"')\]]+/gi
+const GITHUB_REPO_REGEX = /^https?:\/\/github\.com\/([^/]+)\/([^/]+?)(?:\/(?:tree|blob)\/([^/]+))?(?:\/.*)?$/
+
+async function fetchGitHubContent(owner: string, repo: string, branch?: string): Promise<string | null> {
+  const ghToken = process.env.GITHUB_TOKEN
+  const headers: Record<string, string> = { Accept: 'application/vnd.github+json' }
+  if (ghToken) headers.Authorization = `Bearer ${ghToken}`
+
+  try {
+    // 1) repo 메타데이터
+    const metaRes = await fetch(`https://api.github.com/repos/${owner}/${repo}`, {
+      headers, signal: AbortSignal.timeout(10_000),
+    })
+    if (!metaRes.ok) return null
+    const meta = await metaRes.json() as {
+      description?: string; stargazers_count?: number; language?: string
+      topics?: string[]; default_branch?: string
+    }
+
+    const ref = branch || meta.default_branch || 'main'
+
+    // 2) README
+    const readmeRes = await fetch(
+      `https://api.github.com/repos/${owner}/${repo}/readme?ref=${ref}`,
+      { headers: { ...headers, Accept: 'application/vnd.github.raw+json' }, signal: AbortSignal.timeout(10_000) },
+    )
+    const readme = readmeRes.ok ? await readmeRes.text() : ''
+
+    // 3) 조합
+    const parts: string[] = [
+      `📦 ${owner}/${repo}`,
+      meta.description ? `설명: ${meta.description}` : '',
+      meta.language ? `주요 언어: ${meta.language}` : '',
+      meta.stargazers_count ? `⭐ ${meta.stargazers_count}` : '',
+      meta.topics?.length ? `토픽: ${meta.topics.join(', ')}` : '',
+      readme ? `\n--- README ---\n${readme}` : '',
+    ]
+    return parts.filter(Boolean).join('\n').slice(0, 6000)
+  } catch {
+    return null
+  }
+}
+
+// ── 기존 게시물 중복 검사 (Notion 검색)
+async function checkDuplicateRepos(repoNames: string[]): Promise<Set<string>> {
+  const duplicates = new Set<string>()
+  const notionKey = process.env.NOTION_API_KEY
+  if (!notionKey || repoNames.length === 0) return duplicates
+
+  for (const name of repoNames) {
+    try {
+      const res = await fetch('https://api.notion.com/v1/search', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${notionKey}`,
+          'Notion-Version': '2022-06-28',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ query: name, page_size: 3 }),
+        signal: AbortSignal.timeout(8_000),
+      })
+      const data = await res.json() as { results?: Array<Record<string, unknown>> }
+      if (data.results?.some(r => {
+        const title = r.type === 'child_page'
+          ? (r.child_page as Record<string, string>)?.title || ''
+          : ''
+        return title.toLowerCase().includes(name.toLowerCase())
+      })) {
+        duplicates.add(name)
+      }
+    } catch { /* skip */ }
+  }
+  return duplicates
+}
+
+// ── GitHub 인기 레포 검색 (stars 기준)
+interface GitHubRepoResult {
+  name: string
+  fullName: string
+  url: string
+  description: string
+  stars: number
+  language: string
+  topics: string[]
+  readme?: string
+}
+
+async function searchGitHubRepos(
+  query: string,
+  options: { minStars?: number; language?: string; limit?: number; fetchReadme?: boolean } = {}
+): Promise<GitHubRepoResult[]> {
+  const { minStars = 100, language, limit = 5, fetchReadme = true } = options
+  const ghToken = process.env.GITHUB_TOKEN
+  const headers: Record<string, string> = { Accept: 'application/vnd.github+json' }
+  if (ghToken) headers.Authorization = `Bearer ${ghToken}`
+
+  try {
+    let q = `${query} stars:>=${minStars}`
+    if (language) q += ` language:${language}`
+
+    const searchRes = await fetch(
+      `https://api.github.com/search/repositories?q=${encodeURIComponent(q)}&sort=stars&order=desc&per_page=${limit}`,
+      { headers, signal: AbortSignal.timeout(15_000) },
+    )
+    if (!searchRes.ok) return []
+    const data = await searchRes.json() as { items?: Array<Record<string, unknown>> }
+    if (!data.items?.length) return []
+
+    const repos: GitHubRepoResult[] = await Promise.all(
+      data.items.map(async (item) => {
+        const repo: GitHubRepoResult = {
+          name: item.name as string,
+          fullName: item.full_name as string,
+          url: item.html_url as string,
+          description: (item.description as string) || '',
+          stars: (item.stargazers_count as number) || 0,
+          language: (item.language as string) || '',
+          topics: (item.topics as string[]) || [],
+        }
+
+        if (fetchReadme) {
+          try {
+            const readmeRes = await fetch(
+              `https://api.github.com/repos/${repo.fullName}/readme`,
+              { headers: { ...headers, Accept: 'application/vnd.github.raw+json' }, signal: AbortSignal.timeout(8_000) },
+            )
+            if (readmeRes.ok) repo.readme = (await readmeRes.text()).slice(0, 3000)
+          } catch { /* skip */ }
+        }
+
+        return repo
+      })
+    )
+
+    return repos
+  } catch {
+    return []
+  }
+}
 
 async function fetchUrlContent(url: string): Promise<string | null> {
+  // GitHub 레포 URL이면 API로 깔끔하게 가져오기
+  const ghMatch = url.match(GITHUB_REPO_REGEX)
+  if (ghMatch) {
+    const result = await fetchGitHubContent(ghMatch[1], ghMatch[2], ghMatch[3])
+    if (result) return result
+  }
+
   try {
     const res = await fetch(url, {
       headers: { 'User-Agent': 'Mozilla/5.0 (compatible; QuickBizLab/1.0)' },
@@ -277,14 +422,13 @@ async function fetchUrlContent(url: string): Promise<string | null> {
       return `[${contentType} 파일, 텍스트 추출 불가]`
     }
     const html = await res.text()
-    // HTML 태그 제거, 텍스트만 추출
     const text = html
       .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
       .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
       .replace(/<[^>]+>/g, ' ')
       .replace(/\s+/g, ' ')
       .trim()
-    return text.slice(0, 3000) // 토큰 절약 위해 3000자 제한
+    return text.slice(0, 3000)
   } catch {
     return null
   }
@@ -900,21 +1044,20 @@ const CONTENT_PROMPTS: Record<ContentType, string> = {
 규칙:
 - 슬라이드 수: 콘텐츠 양에 맞게 5~15장 자유 결정 (억지로 늘리거나 줄이지 말 것)
 - 첫 장: cover (임팩트 있는 제목 + 부제)
-- 중간: 핵심 내용 — 아래 7종 레이아웃을 주제에 맞게 다양하게 배치
-  - basic: 제목 + 본문 (기본)
-  - stats: 핵심 수치 강조 (items에 label/value 쌍)
-  - checklist: 체크리스트 (items에 label, checked: true/false)
-  - comparison: A vs B 비교 (items 짝수 인덱스=A, 홀수=B)
-  - timeline: 시간순 흐름 (items에 label, date, value)
-  - table: 표 형식 (items 첫번째=헤더, 나머지=행, label/value)
-  - quote: 인용/명언 (title=인용문, body=출처)
-- 마지막 장: cta (팔로우/공유 유도)
+- 중간: 핵심 내용 — 아래 5종 레이아웃을 주제에 맞게 다양하게 배치
+  - list: 제목 + 항목 리스트 (items에 label/value 쌍, 2~4개)
+  - stat: 핵심 수치 강조 (items 첫번째: label=설명, value=숫자)
+  - quote: 인용/명언 (title=출처, body=인용문)
+  - table: 표 형식 (items에 label/value 쌍)
+  - photo: 사진 위 제목+부제 (title/body만)
+- 마지막 장: outro (마무리 카피 + CTA)
 - 같은 레이아웃 연속 2번 사용 금지 — 반드시 다양하게
+- **title에서 강조하고 싶은 단어는 **별표**로 감싸기** (예: "**7장**이면 충분해요")
 - 각 슬라이드에 어울리는 이모지 1개
 - 해시태그 5개
 
 출력: 순수 JSON만 (설명 없이, 코드블록 없이):
-{"slides":[{"title":"제목","body":"본문","emoji":"🚀","layout":"basic"},{"title":"핵심 지표","emoji":"📊","layout":"stats","items":[{"label":"매출","value":"120억"},{"label":"성장률","value":"+35%"}]},{"title":"체크리스트","emoji":"✅","layout":"checklist","items":[{"label":"항목1","checked":true},{"label":"항목2","checked":false}]}],"hashtags":["키워드1","키워드2"]}`,
+{"slides":[{"title":"**핵심** 포인트","body":"본문","emoji":"🚀","layout":"list","items":[{"label":"소제목","value":"설명 1~2문장"}]},{"title":"놀라운 수치","emoji":"📊","layout":"stat","items":[{"label":"월 성장률","value":"35%"}]},{"title":"출처","body":"핵심 인용문","emoji":"💬","layout":"quote"}],"hashtags":["키워드1","키워드2"]}`,
 
   newsletter: `HTML 이메일 뉴스레터를 생성하세요.
 
@@ -1217,11 +1360,63 @@ JSON 형식만 출력:
     const { employeeName: name, dept, role, speech, message: taskDesc } = body
     const context = body.previousSummary || ''
 
-    // URL 감지 → 내용 가져오기
+    // GitHub 탐색 감지 — "깃허브에서 좋은 거 찾아", "인기 레포 찾아" 등
+    const GITHUB_SEARCH_KEYWORDS = ['깃허브', 'github', '레포', 'repo', '오픈소스', 'open source']
+    const FIND_KEYWORDS = ['찾아', '검색', '탐색', '추천', '발굴', '조사', '서치']
+    const isGitHubSearch = GITHUB_SEARCH_KEYWORDS.some(k => taskDesc.toLowerCase().includes(k))
+      && FIND_KEYWORDS.some(k => taskDesc.includes(k))
+
+    let githubSearchContext = ''
+    let githubRepos: GitHubRepoResult[] = []
+    if (isGitHubSearch) {
+      // 업무 지시에서 검색 키워드 추출 (GitHub/찾아 등 제거 후 핵심어)
+      const stripWords = [...GITHUB_SEARCH_KEYWORDS, ...FIND_KEYWORDS, '카드뉴스', '만들', '생성', '인기', '좋은', '스타', 'star', '에서', '해줘', '해서', '해봐']
+      let searchQuery = taskDesc.toLowerCase()
+      stripWords.forEach(w => { searchQuery = searchQuery.replace(new RegExp(w, 'gi'), '') })
+      searchQuery = searchQuery.replace(/[^\w\s가-힣]/g, '').trim()
+      if (!searchQuery || searchQuery.length < 2) searchQuery = dept === '개발' ? 'nextjs react' : dept === '마케팅' ? 'marketing automation' : 'trending'
+
+      console.log('[autonomous-task] GitHub search query:', searchQuery)
+      githubRepos = await searchGitHubRepos(searchQuery, { minStars: 500, limit: 5, fetchReadme: true })
+
+      if (githubRepos.length > 0) {
+        const duplicates = await checkDuplicateRepos(githubRepos.map(r => r.name))
+        const beforeCount = githubRepos.length
+        githubRepos = githubRepos.filter(r => !duplicates.has(r.name))
+        if (duplicates.size > 0) {
+          console.log(`[autonomous-task] 중복 제외: ${duplicates.size}건 (${[...duplicates].join(', ')})`)
+        }
+
+        if (githubRepos.length > 3) githubRepos = githubRepos.slice(0, 3)
+
+        if (githubRepos.length > 0) {
+          githubSearchContext = '\n■ GitHub 검색 결과 (⭐ 스타 순):\n' + githubRepos.map((r, i) =>
+            `${i + 1}. **${r.fullName}** ⭐${r.stars.toLocaleString()} | ${r.language}\n   ${r.description}\n   ${r.url}${r.readme ? `\n   README 요약: ${r.readme.slice(0, 800)}` : ''}`
+          ).join('\n\n') + '\n'
+          if (beforeCount > githubRepos.length + duplicates.size) {
+            githubSearchContext += `(기존 게시물 ${duplicates.size}건 중복 제외)\n`
+          }
+        } else {
+          githubSearchContext = '\n■ GitHub 검색 결과: 모두 이미 게시된 레포입니다. 다른 키워드로 검색해주세요.\n'
+        }
+      }
+    }
+
+    // URL 감지 → 내용 가져오기 (GitHub URL 중복 체크 포함)
     const taskUrls = taskDesc.match(URL_REGEX) || []
     let taskUrlContext = ''
     if (taskUrls.length > 0) {
+      const allRepoNames = taskUrls
+        .map((u: string) => u.match(GITHUB_REPO_REGEX))
+        .filter(Boolean)
+        .map(m => m![2])
+      const urlDuplicates = allRepoNames.length > 0 ? await checkDuplicateRepos(allRepoNames) : new Set<string>()
+
       const fetched = await Promise.all(taskUrls.slice(0, 2).map(async (url: string) => {
+        const ghMatch = url.match(GITHUB_REPO_REGEX)
+        if (ghMatch && urlDuplicates.has(ghMatch[2])) {
+          return `\n■ URL (${url}): 이미 게시된 레포입니다. 중복 건너뜀.\n`
+        }
         const content = await fetchUrlContent(url)
         return content ? `\n■ URL 분석 (${url}):\n${content}\n` : `\n■ URL (${url}): 내용을 가져올 수 없습니다.\n`
       }))
@@ -1235,7 +1430,7 @@ JSON 형식만 출력:
 ${skills ? `\n■ 보유 스킬: ${skills}\n  → 업무에 적합한 스킬을 활용하고, 사용한 스킬은 [스킬명]으로 표시하세요.` : ''}
 
 ■ 대표님이 내린 업무 지시: "${taskDesc}"
-${context ? `■ 이전 단계 결과:\n${context}\n` : ''}${taskUrlContext}
+${context ? `■ 이전 단계 결과:\n${context}\n` : ''}${githubSearchContext}${taskUrlContext}
 
 ■ 출력 규칙:
 1. 첫 줄: [진행] 작업 시작 한마디 (사용할 스킬 언급)
@@ -1291,7 +1486,8 @@ ${role === '레드팀' ? '9. [레드팀] 리스크/문제점 지적 + 개선안'
     let contentResult: { type: string; title: string; html: string; url: string } | null = null
     const taskContentType = detectContentType(taskDesc)
     if (taskContentType) {
-      contentResult = await generateContent(taskContentType, taskDesc, dept, name, role, context)
+      const contentContext = githubSearchContext ? `${context}\n${githubSearchContext}` : context
+      contentResult = await generateContent(taskContentType, taskDesc, dept, name, role, contentContext)
       if (contentResult && !notionSaved) {
         notionSaved = { title: contentResult.title, url: contentResult.url, type: contentResult.type }
       }

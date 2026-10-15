@@ -1,0 +1,177 @@
+/* 카드뉴스 템플릿 CSS — index.html 6종 포팅 */
+/* 1080px 기준 렌더, 화면에는 축소 표시 */
+
+.cn-frame{position:relative;width:100%;aspect-ratio:1/1;overflow:hidden;border-radius:8px;background:#fff;box-shadow:0 1px 2px rgba(20,25,35,.08)}
+.cn-frame.r-45{aspect-ratio:4/5}
+.cn-frame>.cn-card{position:absolute;left:0;top:0;transform-origin:0 0;transform:scale(var(--s,.25))}
+
+.cn-card{
+  --H:1080px;
+  position:relative;width:1080px;height:var(--H);overflow:hidden;
+  font-family:"Noto Sans KR","Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif;
+  color:var(--c-text);background:var(--c-bg);line-height:1.4;
+  word-break:keep-all;overflow-wrap:anywhere;text-align:left;
+  -webkit-font-smoothing:antialiased;
+}
+.cn-card.r-45{--H:1350px}
+.cn-card *{box-sizing:border-box;margin:0}
+
+.cn-card .c-photo{position:absolute;left:0;top:0;right:0;bottom:0;background-size:cover;background-position:center;background-repeat:no-repeat}
+.cn-card .c-shade{position:absolute;left:0;top:0;right:0;bottom:0;pointer-events:none}
+.cn-card .c-body{position:absolute;left:0;top:0;right:0;bottom:0;display:flex;flex-direction:column;padding:72px 80px 80px}
+.cn-card .c-top{display:flex;justify-content:space-between;align-items:center;gap:24px;flex:none;margin-bottom:28px}
+.cn-card .c-brand{font-size:30px;font-weight:800;color:var(--c-hl);position:absolute;bottom:80px;right:80px;z-index:2;text-align:right}
+.cn-card .c-page{font-size:28px;font-weight:700;color:var(--c-sub);white-space:nowrap}
+.cn-card .c-main{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;justify-content:center}
+.cn-card .c-deco{display:block;flex:none}
+
+.cn-card .c-kicker{font-size:32px;font-weight:800;align-self:flex-start;margin-bottom:30px}
+.cn-card .c-title{font-size:72px;font-weight:900;line-height:1.22;letter-spacing:-.025em}
+.cn-card .c-sub{font-size:40px;line-height:1.5;color:var(--c-sub);margin-top:32px;font-weight:500}
+.cn-card.l-cover .c-title{font-size:100px;line-height:1.16}
+.cn-card .c-items{display:flex;flex-direction:column;gap:38px;margin-top:52px}
+.cn-card .c-item{display:flex;gap:28px;align-items:flex-start}
+.cn-card .c-no{flex:none;width:68px;height:68px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:28px;font-weight:900;background:var(--c-hl);color:var(--c-on-hl)}
+.cn-card .c-it{flex:1;min-width:0}
+.cn-card .c-ih{font-size:46px;font-weight:800;line-height:1.3}
+.cn-card .c-ib{font-size:36px;line-height:1.5;color:var(--c-sub);margin-top:8px}
+.cn-card .c-qm{flex:none;height:118px;font-family:Georgia,"Times New Roman",serif;font-size:230px;font-weight:700;line-height:1;color:var(--c-hl)}
+.cn-card .c-quote{font-size:66px;font-weight:800;line-height:1.36;letter-spacing:-.02em}
+.cn-card.l-quote .c-title{font-size:36px;font-weight:700;line-height:1.4;letter-spacing:0;color:var(--c-sub);margin-top:44px}
+.cn-card.l-stat .c-title{font-size:46px;font-weight:800;line-height:1.3}
+.cn-card .c-number{font-size:250px;font-weight:900;line-height:1.08;letter-spacing:-.04em;color:var(--c-hl);margin:16px 0 14px}
+.cn-card .c-desc{font-size:40px;line-height:1.5;color:var(--c-sub);font-weight:500}
+.cn-card.l-outro .c-title{font-size:84px;line-height:1.2}
+.cn-card .c-cta{font-size:36px;font-weight:800;align-self:flex-start;margin-top:48px;padding:22px 40px;border-radius:999px;background:var(--c-hl);color:var(--c-on-hl)}
+.cn-card .c-tags{font-size:28px;line-height:1.5;color:var(--c-sub);margin-top:36px}
+
+/* table layout */
+.cn-card .c-table{display:grid;grid-template-columns:auto 1fr;gap:0;margin-top:40px;border-top:3px solid var(--c-text);border-bottom:3px solid var(--c-text)}
+.cn-card .c-table .c-td{padding:18px 24px;border-bottom:1px solid rgba(128,128,128,.2)}
+.cn-card .c-table .c-td:nth-child(odd){font-weight:800;background:rgba(128,128,128,.06);min-width:200px}
+
+/* photo layout */
+.cn-card.l-photo .c-body{justify-content:flex-end;padding-top:0}
+.cn-card.l-photo .c-main{flex:none;background:rgba(0,0,0,.55);margin:0 -80px -80px;padding:48px 80px 80px;backdrop-filter:blur(6px)}
+.cn-card.l-photo .c-title{font-size:72px;color:#fff !important}
+.cn-card.l-photo .c-sub{font-size:36px;color:rgba(255,255,255,.8) !important}
+.cn-card.l-photo .c-photo{background-image:linear-gradient(135deg,#667eea 0%,#764ba2 100%)}
+
+/* ── Template 1. 클린 ── */
+.cn-card.t-clean{--c-bg:#fff;--c-text:#141821;--c-sub:#5b6375;--c-hl:#4a6cf7;--c-on-hl:#fff}
+.cn-card.t-clean .c-kicker{color:var(--c-hl);border:3px solid var(--c-hl);border-radius:999px;padding:8px 24px}
+.cn-card.t-clean .c-deco{width:88px;height:12px;border-radius:6px;background:var(--c-hl);margin-bottom:36px}
+.cn-card.t-clean.l-cover .c-deco,.cn-card.t-clean.l-quote .c-deco,.cn-card.t-clean.l-stat .c-deco{display:none}
+.cn-card.t-clean.l-cover .c-photo{left:80px;right:80px;top:auto;bottom:80px;height:calc(var(--H) * .34);border-radius:40px;opacity:1;background-color:#eef1fe}
+.cn-card.t-clean.l-cover:not(.has-photo) .c-photo{background-image:linear-gradient(135deg,#eef1fe 0%,#c5cffc 100%)}
+.cn-card.t-clean.l-cover .c-body{padding-bottom:calc(var(--H) * .34 + 116px)}
+.cn-card.t-clean .c-item+.c-item{border-top:2px solid #e8ebf2;padding-top:38px}
+
+/* ── Template 2. 블랙 임팩트 ── */
+.cn-card.t-black{--c-bg:#0b0b0d;--c-text:#fff;--c-sub:#b6bac4;--c-hl:#d6ff3f;--c-on-hl:#0b0b0d}
+.cn-card.t-black .c-photo{background-image:radial-gradient(circle at 88% 8%,rgba(214,255,63,.28) 0%,rgba(214,255,63,0) 48%)}
+.cn-card.t-black .c-page{background:var(--c-hl);color:#0b0b0d;font-weight:900;padding:4px 18px}
+.cn-card.t-black .c-title{letter-spacing:-.035em}
+.cn-card.t-black.l-cover .c-title{font-size:114px;line-height:1.12}
+.cn-card.t-black.l-cover .c-main,.cn-card.t-black.l-outro .c-main{justify-content:flex-end}
+.cn-card.t-black .c-kicker{background:var(--c-hl);color:#0b0b0d;padding:8px 22px}
+.cn-card.t-black .c-deco{width:120px;height:16px;background:var(--c-hl);margin-bottom:40px}
+.cn-card.t-black.l-cover .c-deco,.cn-card.t-black.l-quote .c-deco{display:none}
+.cn-card.t-black .c-no{width:84px;height:auto;border-radius:0;background:none;color:var(--c-hl);font-size:50px;line-height:1.1;justify-content:flex-start}
+.cn-card.t-black .c-sub,.cn-card.t-black .c-desc{color:#d9dce3}
+.cn-card.t-black .c-number{font-size:280px}
+.cn-card.t-black .c-cta{border-radius:0}
+.cn-card.t-black .c-table{border-color:var(--c-hl)}
+
+/* ── Template 3. 매거진 포토 ── */
+.cn-card.t-mag{--c-bg:#cfc6ba;--c-text:#17181c;--c-sub:#5e6168;--c-hl:#4a6cf7;--c-on-hl:#fff}
+.cn-card.t-mag .c-photo{background-image:linear-gradient(140deg,#dccdbb 0%,#a08b76 100%)}
+.cn-card.t-mag .c-body{left:56px;right:56px;bottom:56px;top:auto;max-height:calc(var(--H) - 206px);background:#fff;padding:48px 60px 60px}
+.cn-card.t-mag .c-top{border-bottom:3px solid #17181c;padding-bottom:18px;margin-bottom:34px}
+.cn-card.t-mag .c-brand{color:#17181c;letter-spacing:.02em}
+.cn-card.t-mag .c-main{justify-content:flex-start}
+.cn-card.t-mag .c-deco{display:none}
+.cn-card.t-mag .c-title{font-size:60px;letter-spacing:-.02em}
+.cn-card.t-mag.l-cover .c-title{font-size:84px;line-height:1.2}
+.cn-card.t-mag .c-kicker{font-size:28px;color:var(--c-hl);letter-spacing:.06em;margin-bottom:20px}
+.cn-card.t-mag .c-sub{font-size:34px;margin-top:24px}
+.cn-card.t-mag .c-items{gap:28px;margin-top:36px}
+.cn-card.t-mag .c-no{width:72px;height:auto;border-radius:0;background:none;color:var(--c-hl);font-size:44px;line-height:1.15;justify-content:flex-start}
+.cn-card.t-mag .c-ih{font-size:40px}
+.cn-card.t-mag .c-ib{font-size:32px}
+.cn-card.t-mag .c-qm{height:96px;font-size:190px}
+.cn-card.t-mag .c-quote{font-size:56px}
+.cn-card.t-mag.l-quote .c-title{font-size:32px;letter-spacing:0;margin-top:32px}
+.cn-card.t-mag.l-stat .c-title{font-size:40px}
+.cn-card.t-mag .c-number{font-size:200px;margin:8px 0}
+.cn-card.t-mag .c-desc{font-size:34px}
+.cn-card.t-mag.l-outro .c-title{font-size:68px}
+.cn-card.t-mag .c-cta{font-size:32px;margin-top:36px;padding:18px 34px;border-radius:0}
+.cn-card.t-mag .c-tags{margin-top:28px}
+
+/* ── Template 4. 뉴스레터 ── */
+.cn-card.t-news{--c-bg:#faf8f3;--c-text:#2d2117;--c-sub:#7a6b5d;--c-hl:#d4622b;--c-on-hl:#fff}
+.cn-card.t-news .c-kicker{font-size:26px;color:var(--c-hl);text-transform:uppercase;letter-spacing:.08em;border-bottom:2px solid var(--c-hl);padding-bottom:8px;margin-bottom:28px}
+.cn-card.t-news .c-deco{width:100%;height:3px;background:repeating-linear-gradient(90deg,var(--c-hl) 0 20px,transparent 20px 28px);margin-bottom:32px}
+.cn-card.t-news.l-cover .c-deco{display:none}
+.cn-card.t-news .c-title{font-size:66px;letter-spacing:-.02em}
+.cn-card.t-news.l-cover .c-title{font-size:88px;line-height:1.18}
+.cn-card.t-news .c-sub{font-size:36px;font-style:italic}
+.cn-card.t-news .c-items{gap:30px;margin-top:40px}
+.cn-card.t-news .c-no{background:var(--c-hl);border-radius:50%}
+.cn-card.t-news .c-ih{font-size:42px}
+.cn-card.t-news .c-ib{font-size:34px}
+.cn-card.t-news .c-qm{color:var(--c-hl);opacity:.4}
+.cn-card.t-news .c-quote{font-size:58px;font-style:italic}
+.cn-card.t-news.l-outro .c-title{font-size:72px}
+.cn-card.t-news .c-cta{border-radius:4px}
+.cn-card.t-news .c-page{font-style:italic}
+.cn-card.t-news .c-table{border-color:var(--c-hl)}
+
+/* ── Template 5. 에디토리얼 ── */
+.cn-card.t-edit{--c-bg:#f2f0eb;--c-text:#1a1a1a;--c-sub:#555;--c-hl:#c41e3a;--c-on-hl:#fff}
+.cn-card.t-edit .c-kicker{font-size:24px;text-transform:uppercase;letter-spacing:.14em;font-weight:900;color:var(--c-hl);margin-bottom:24px}
+.cn-card.t-edit .c-deco{width:60px;height:6px;background:var(--c-hl);margin-bottom:36px}
+.cn-card.t-edit.l-cover .c-deco,.cn-card.t-edit.l-quote .c-deco{display:none}
+.cn-card.t-edit .c-title{font-size:78px;font-weight:900;letter-spacing:-.03em;line-height:1.14;text-transform:uppercase}
+.cn-card.t-edit.l-cover .c-title{font-size:110px;line-height:1.08}
+.cn-card.t-edit .c-sub{font-size:38px;font-weight:400;letter-spacing:.01em}
+.cn-card.t-edit .c-no{width:80px;height:auto;border-radius:0;background:none;color:var(--c-hl);font-size:56px;font-weight:900;line-height:1;justify-content:flex-start}
+.cn-card.t-edit .c-ih{font-size:44px;text-transform:uppercase;letter-spacing:.02em}
+.cn-card.t-edit .c-ib{font-size:34px}
+.cn-card.t-edit .c-qm{height:100px;font-size:200px;color:var(--c-hl)}
+.cn-card.t-edit .c-quote{font-size:64px;font-weight:900;text-transform:uppercase;letter-spacing:-.01em}
+.cn-card.t-edit.l-quote .c-title{font-size:34px;text-transform:none;font-weight:500;letter-spacing:0}
+.cn-card.t-edit.l-stat .c-title{font-size:44px}
+.cn-card.t-edit .c-number{font-size:260px;font-weight:900;letter-spacing:-.05em}
+.cn-card.t-edit .c-desc{font-size:38px}
+.cn-card.t-edit.l-outro .c-title{font-size:86px}
+.cn-card.t-edit .c-cta{border-radius:0;text-transform:uppercase;letter-spacing:.06em}
+.cn-card.t-edit .c-page{font-weight:900;letter-spacing:.04em}
+
+/* ── Template 6. 팝 비비드 ── */
+.cn-card.t-pop{--c-bg:#1b0534;--c-text:#fff;--c-sub:#d4c6f0;--c-hl:#ffde3b;--c-on-hl:#1b0534}
+.cn-card.t-pop .c-photo{background-image:linear-gradient(135deg,#6b1fa8 0%,#e63e8c 50%,#ff8c42 100%)}
+.cn-card.t-pop .c-kicker{font-size:30px;background:var(--c-hl);color:var(--c-on-hl);padding:10px 24px;border-radius:999px;font-weight:900}
+.cn-card.t-pop .c-deco{width:100px;height:14px;border-radius:7px;background:linear-gradient(90deg,#ff6b9d,#ffde3b);margin-bottom:36px}
+.cn-card.t-pop.l-cover .c-deco,.cn-card.t-pop.l-quote .c-deco{display:none}
+.cn-card.t-pop .c-title{font-size:76px;font-weight:900;letter-spacing:-.02em}
+.cn-card.t-pop.l-cover .c-title{font-size:106px;line-height:1.14}
+.cn-card.t-pop .c-sub{font-size:38px}
+.cn-card.t-pop .c-items{gap:32px;margin-top:44px}
+.cn-card.t-pop .c-no{width:72px;height:72px;border-radius:20px;background:var(--c-hl);color:var(--c-on-hl);font-size:30px}
+.cn-card.t-pop .c-ih{font-size:44px}
+.cn-card.t-pop .c-ib{font-size:34px}
+.cn-card.t-pop .c-qm{height:110px;font-size:220px;color:var(--c-hl)}
+.cn-card.t-pop .c-quote{font-size:62px;font-weight:900}
+.cn-card.t-pop.l-quote .c-title{font-size:34px;font-weight:500}
+.cn-card.t-pop.l-stat .c-title{font-size:44px}
+.cn-card.t-pop .c-number{font-size:260px;color:var(--c-hl);text-shadow:0 0 40px rgba(255,222,59,.4)}
+.cn-card.t-pop .c-desc{font-size:38px}
+.cn-card.t-pop.l-outro .c-title{font-size:82px}
+.cn-card.t-pop .c-cta{border-radius:999px;background:linear-gradient(90deg,#ff6b9d,#ffde3b);color:#1b0534}
+.cn-card.t-pop .c-page{background:rgba(255,255,255,.15);padding:4px 16px;border-radius:999px}
+.cn-card.t-pop .c-table{border-color:var(--c-hl)}
+
+/* ── 캡처용 숨김 호스트 ── */
+.cn-shot-host{position:fixed;left:-20000px;top:0;width:1080px;pointer-events:none;z-index:-1}
