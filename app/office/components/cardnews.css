@@ -18,6 +18,8 @@
 
 .cn-card .c-photo{position:absolute;left:0;top:0;right:0;bottom:0;background-size:cover;background-position:center;background-repeat:no-repeat;opacity:.15}
 .cn-card.has-photo .c-photo{opacity:1}
+.cn-card.has-photo.l-cover .c-photo{left:0 !important;right:0 !important;top:0 !important;bottom:0 !important;height:auto !important;border-radius:0 !important;background-color:transparent !important}
+.cn-card.has-photo.l-cover .c-body{padding-bottom:80px !important}
 .cn-card .c-shade{position:absolute;left:0;top:0;right:0;bottom:0;pointer-events:none}
 .cn-card.has-photo .c-shade{background:linear-gradient(180deg,rgba(0,0,0,.45) 0%,rgba(0,0,0,.65) 100%)}
 .cn-card.has-photo .c-body{color:#fff}

@@ -79,7 +79,7 @@ export function CommandPanel({ isMobile, onSwitchToOffice }: Props) {
   } | null>(null)
   const [contentPreview, setContentPreview] = useState<{
     type: string; title: string; html: string; url: string; notionPageId?: string
-    cardnewsData?: { slides: Array<{ title: string; body: string; emoji?: string; layout?: string; imageUrl?: string; items?: Array<{ label: string; value?: string; checked?: boolean; date?: string }> }>; hashtags?: string[] }
+    cardnewsData?: { slides: Array<{ title: string; body: string; emoji?: string; layout?: string; imageUrl?: string; cta?: string; items?: Array<{ label: string; value?: string; checked?: boolean; date?: string }> }>; hashtags?: string[] }
     imageReady?: boolean
   } | null>(null)
   const [generatingImages, setGeneratingImages] = useState(false)
@@ -165,7 +165,7 @@ export function CommandPanel({ isMobile, onSwitchToOffice }: Props) {
         quote: s.layout === 'quote' ? s.body : undefined,
         number: s.layout === 'stat' || s.layout === 'stats' ? s.items?.[0]?.value : undefined,
         desc: s.layout === 'stat' || s.layout === 'stats' ? s.items?.[0]?.label : undefined,
-        cta: s.layout === 'cta' || s.layout === 'outro' ? (s.body || '자세히 보기') : undefined,
+        cta: s.layout === 'cta' || s.layout === 'outro' ? (s.cta || '자세히 보기') : undefined,
         imageUrl: s.imageUrl || undefined,
         items: s.items?.map(it => ({ head: it.label, body: it.value || '' })),
       })),

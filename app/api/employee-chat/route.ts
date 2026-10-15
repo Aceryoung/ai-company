@@ -1075,23 +1075,24 @@ const CONTENT_PROMPTS: Record<ContentType, string> = {
 
 규칙:
 - 슬라이드 수: 콘텐츠 양에 맞게 5~15장 자유 결정 (억지로 늘리거나 줄이지 말 것)
-- 첫 장: cover (임팩트 있는 제목 + 부제)
+- 첫 장: cover (임팩트 있는 제목 + 부제 2~3문장)
 - 중간: 핵심 내용 — 아래 5종 레이아웃을 주제에 맞게 다양하게 배치
-  - list: 제목 + 항목 리스트 (items에 label/value 쌍, 2~4개). value는 반드시 1~2문장 설명 포함
-  - stat: 핵심 수치 강조 (items 첫번째: label=설명 1문장, value=숫자+단위). title은 짧게 (15자 이내)
-  - quote: 인용/명언 (title=출처, body=인용문 2~3문장)
-  - table: 비교 표 (items에 label/value 쌍, 3~5개)
-  - photo: 사진 위 제목+부제 (title 15자 이내, body 1~2문장)
-- 마지막 장: outro (마무리 카피 + CTA)
+  - list: 제목 + 항목 리스트 (items 3~4개 필수). 각 item의 label은 소제목, value는 반드시 2문장 이상 충분한 설명
+  - stat: 핵심 수치 강조 (items 첫번째: label=2문장 설명, value=숫자+단위). title은 10자 이내
+  - quote: 인용/명언 (title=출처, body=인용문 3~4문장으로 충분히 길게)
+  - table: 비교 표 (items 4~6개, label/value 쌍)
+  - photo: 사진 위 제목+부제 (title 10자 이내, body 2~3문장)
+- 마지막 장: outro (마무리 카피 + CTA 문구는 10자 이내로 짧게)
 - 같은 레이아웃 연속 2번 사용 금지 — 반드시 다양하게
-- **title에서 강조하고 싶은 단어는 **별표**로 감싸기** (예: "**7장**이면 충분해요")
-- title은 15자 이내로 짧고 임팩트 있게. 긴 설명은 body나 items에
-- 이모지: cover와 outro에만 1개씩. 중간 슬라이드에는 이모지 불필요
-- imageKeyword: cover와 photo 레이아웃에만 배경 이미지 검색용 영어 키워드 1~2단어 (예: "coding laptop", "data chart"). 나머지 레이아웃에는 imageKeyword 넣지 마세요
+- **title에서 강조 단어는 **별표**로 감싸기** (예: "**7장**이면 충분해요")
+- title은 10자 이내. 긴 설명은 body나 items에
+- 이모지: 사용하지 마세요 (emoji 필드 비워두기)
+- imageKeyword: cover와 photo 레이아웃에만 배경 이미지 검색용 영어 키워드 1~2단어 (예: "coding laptop", "data chart"). 반드시 포함할 것. 나머지 레이아웃에는 imageKeyword 넣지 마세요
 - 해시태그 5개
+- 중요: 각 슬라이드의 텍스트가 카드를 충분히 채울 만큼 작성하세요. 빈 공간이 많으면 안 됩니다
 
 출력: 순수 JSON만 (설명 없이, 코드블록 없이):
-{"slides":[{"title":"**핵심** 포인트","body":"본문","layout":"list","imageKeyword":"technology workspace","items":[{"label":"소제목","value":"설명 1~2문장"}]},{"title":"놀라운 수치","layout":"stat","imageKeyword":"data analytics","items":[{"label":"월간 활성 사용자 증가율","value":"35%"}]},{"title":"출처","body":"핵심 인용문 2~3문장","layout":"quote","imageKeyword":"inspiration"}],"hashtags":["키워드1","키워드2"]}`,
+{"slides":[{"title":"**핵심** 기능","body":"","layout":"cover","imageKeyword":"ai technology dark"},{"title":"주요 기능","body":"","layout":"list","items":[{"label":"자율 에이전트","value":"프롬프트 하나로 터미널에서 코드 작성부터 디버깅까지 자동 수행합니다. 별도 설정 없이 바로 사용 가능합니다."},{"label":"파일 시스템","value":"로컬 프로젝트 구조를 완벽하게 이해하고 필요한 파일을 직접 수정합니다. Git 연동도 지원합니다."},{"label":"테스트 자동화","value":"코드 변경 후 자동으로 테스트를 실행하고 결과를 분석합니다. 실패 시 자동 수정도 가능합니다."}]},{"title":"성장세","layout":"stat","items":[{"label":"출시 3개월 만에 전 세계 개발자들이 채택한 폭발적인 성장률입니다.","value":"17,000+"}]},{"title":"실무 적용 사례","body":"반복적인 보일러플레이트 코드 작성 시간이 획기적으로 줄었습니다. 개발자는 더 창의적인 아키텍처 설계에 집중할 수 있는 환경이 만들어집니다.","layout":"quote"},{"title":"**시작**하기","body":"최신 AI 기술로 업무 생산성을 극대화하세요.","layout":"outro","cta":"무료 체험"}],"hashtags":["AI코딩","개발자생산성","ClaudeEngineer","깃허브트렌딩","QuickBizLab"]}`,
 
   newsletter: `HTML 이메일 뉴스레터를 생성하세요.
 
