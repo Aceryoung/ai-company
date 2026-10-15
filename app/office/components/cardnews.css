@@ -16,8 +16,14 @@
 .cn-card.r-45{--H:1350px}
 .cn-card *{box-sizing:border-box;margin:0}
 
-.cn-card .c-photo{position:absolute;left:0;top:0;right:0;bottom:0;background-size:cover;background-position:center;background-repeat:no-repeat}
+.cn-card .c-photo{position:absolute;left:0;top:0;right:0;bottom:0;background-size:cover;background-position:center;background-repeat:no-repeat;opacity:.15}
+.cn-card.has-photo .c-photo{opacity:1}
 .cn-card .c-shade{position:absolute;left:0;top:0;right:0;bottom:0;pointer-events:none}
+.cn-card.has-photo .c-shade{background:linear-gradient(180deg,rgba(0,0,0,.35) 0%,rgba(0,0,0,.55) 100%)}
+.cn-card.has-photo .c-body{color:#fff}
+.cn-card.has-photo .c-title,.cn-card.has-photo .c-sub,.cn-card.has-photo .c-desc,.cn-card.has-photo .c-ib,.cn-card.has-photo .c-page{color:rgba(255,255,255,.9) !important}
+.cn-card.has-photo .c-ih{color:#fff !important}
+.cn-card.has-photo .c-brand{color:rgba(255,255,255,.7)}
 .cn-card .c-body{position:absolute;left:0;top:0;right:0;bottom:0;display:flex;flex-direction:column;padding:72px 80px 80px}
 .cn-card .c-top{display:flex;justify-content:space-between;align-items:center;gap:24px;flex:none;margin-bottom:28px}
 .cn-card .c-brand{font-size:30px;font-weight:800;color:var(--c-hl);position:absolute;bottom:80px;right:80px;z-index:2;text-align:right}
@@ -39,7 +45,7 @@
 .cn-card .c-quote{font-size:66px;font-weight:800;line-height:1.36;letter-spacing:-.02em}
 .cn-card.l-quote .c-title{font-size:36px;font-weight:700;line-height:1.4;letter-spacing:0;color:var(--c-sub);margin-top:44px}
 .cn-card.l-stat .c-title{font-size:46px;font-weight:800;line-height:1.3}
-.cn-card .c-number{font-size:250px;font-weight:900;line-height:1.08;letter-spacing:-.04em;color:var(--c-hl);margin:16px 0 14px}
+.cn-card .c-number{font-size:200px;font-weight:900;line-height:1.08;letter-spacing:-.04em;color:var(--c-hl);margin:16px 0 14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .cn-card .c-desc{font-size:40px;line-height:1.5;color:var(--c-sub);font-weight:500}
 .cn-card.l-outro .c-title{font-size:84px;line-height:1.2}
 .cn-card .c-cta{font-size:36px;font-weight:800;align-self:flex-start;margin-top:48px;padding:22px 40px;border-radius:999px;background:var(--c-hl);color:var(--c-on-hl)}

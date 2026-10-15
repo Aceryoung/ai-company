@@ -172,6 +172,45 @@ export function CommandPanel({ isMobile, onSwitchToOffice }: Props) {
     }
   }, [])
 
+  // 카드뉴스 자동 발행 (자율 업무용)
+  const autoPublishCardNews = useCallback(async (
+    contentData: { cardnewsData?: NonNullable<typeof contentPreview>['cardnewsData']; notionPageId?: string; title?: string }
+  ) => {
+    if (!contentData.cardnewsData?.slides?.length) return
+    const deck = convertToDeck(contentData.cardnewsData)
+    addLog('sys', `🤖 자동 발행 시작 — ${deck.slides.length}장 이미지 캡처 중...`)
+
+    try {
+      const imageBlobs = await captureAllCards(deck, cardTemplate, cardRatio)
+      addLog('sys', `📸 ${imageBlobs.length}장 캡처 완료 → 업로드+SNS 발행 중...`)
+
+      const formData = new FormData()
+      if (contentData.notionPageId) formData.append('notionPageId', contentData.notionPageId)
+      imageBlobs.forEach((blob, idx) => {
+        formData.append('images', new File([blob], `slide_${idx + 1}.png`, { type: 'image/png' }))
+      })
+      formData.append('publishToSns', 'true')
+      formData.append('snsCaption', contentData.title || '카드뉴스')
+      const tags = (contentData.cardnewsData as Record<string, unknown>)?.hashtags
+      if (Array.isArray(tags)) formData.append('snsHashtags', tags.join(','))
+
+      const uploadRes = await fetch('/api/upload-cardnews', { method: 'POST', body: formData })
+      if (uploadRes.ok) {
+        const result = await uploadRes.json() as { count: number; notionUpdated: boolean; sns?: { success: boolean; accounts?: string[]; error?: string } }
+        addLog('sys', `✅ 자동 발행 완료! 이미지 ${result.count}장 저장${result.notionUpdated ? ' + Notion 업데이트' : ''}`)
+        if (result.sns?.success) {
+          addLog('sys', `📱 SNS 발행 성공! (${result.sns.accounts?.join(', ')})`)
+        } else if (result.sns?.error) {
+          addLog('sys', `⚠️ SNS 발행 실패: ${result.sns.error}`)
+        }
+      } else {
+        addLog('sys', `⚠️ 자동 발행 업로드 실패`)
+      }
+    } catch (e) {
+      addLog('sys', `⚠️ 자동 발행 오류: ${e}`)
+    }
+  }, [addLog, cardTemplate, cardRatio, convertToDeck])
+
   // 마운트 후 localStorage 복원
   useEffect(() => {
     hydrateChatLog()
@@ -584,9 +623,13 @@ export function CommandPanel({ isMobile, onSwitchToOffice }: Props) {
           addLog('sys', `📎 ${ns.type} "${ns.title}" → Notion에 실제 저장 완료!`)
         }
 
-        // 콘텐츠 생성 알림
+        // 콘텐츠 생성 알림 + 카드뉴스 자동 발행
         if (data.content) {
           addLog('sys', `🎨 ${data.content.type} "${data.content.title}" 생성 완료! → Notion 저장됨`)
+          const contentObj = data.content as { type: string; title: string; notionPageId?: string; cardnewsData?: NonNullable<typeof contentPreview>['cardnewsData'] }
+          if (contentObj.cardnewsData?.slides?.length) {
+            autoPublishCardNews(contentObj)
+          }
         }
 
         // 상태 업데이트
@@ -648,7 +691,7 @@ export function CommandPanel({ isMobile, onSwitchToOffice }: Props) {
         setEmpStatus(emp.id, 'idle')
       }
     }, 3000)
-  }, [addLog, addTask, updateTaskStep, finishTask, setEmpStatus, setEmpBubble, getMemoryContext, extractAndSaveLearning])
+  }, [addLog, addTask, updateTaskStep, finishTask, setEmpStatus, setEmpBubble, getMemoryContext, extractAndSaveLearning, autoPublishCardNews])
 
   // ── Phase 2: 스웜 협업 실행 (복수 부서 페이즈 기반) ──
 
@@ -1131,7 +1174,11 @@ export function CommandPanel({ isMobile, onSwitchToOffice }: Props) {
           addLog('employee', `[${detectedDept}] ${leader.name}: ${data.reply}`)
           if (data.report) addLog('sys', `📄 보고서 "${data.report.title}" 작성 완료! [REPORT:${data.report.id}]`)
           if (data.quote) addLog('sys', `💼 견적서 "${data.quote.title}" 작성 완료! → Notion에 저장됨`)
-          if (data.content) addLog('sys', `🎨 ${data.content.type} "${data.content.title}" 생성 완료! → Notion 저장됨 [CONTENT:${data.content.url}]`)
+          if (data.content) {
+            addLog('sys', `🎨 ${data.content.type} "${data.content.title}" 생성 완료! → Notion 저장됨 [CONTENT:${data.content.url}]`)
+            const contentObj = data.content as { type: string; title: string; notionPageId?: string; cardnewsData?: NonNullable<typeof contentPreview>['cardnewsData'] }
+            if (contentObj.cardnewsData?.slides?.length) autoPublishCardNews(contentObj)
+          }
         } catch {
           addLog('employee', `[${detectedDept}] ${leader.name}: 네 대표님, 확인해보겠습니다! 💪`)
         } finally {

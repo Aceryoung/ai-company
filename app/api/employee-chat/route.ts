@@ -232,6 +232,32 @@ function formatVercelDeployments(deployments: Array<Record<string, unknown>>): s
   return `Vercel 최근 배포 ${deployments.length}건:\n${lines.join('\n')}`
 }
 
+// ── Unsplash 이미지 검색
+async function searchUnsplashImage(query: string): Promise<string | null> {
+  const key = process.env.UNSPLASH_ACCESS_KEY
+  if (!key) return null
+  try {
+    const res = await fetch(
+      `https://api.unsplash.com/search/photos?query=${encodeURIComponent(query)}&per_page=1&orientation=portrait`,
+      { headers: { Authorization: `Client-ID ${key}` }, signal: AbortSignal.timeout(8_000) },
+    )
+    if (!res.ok) return null
+    const data = await res.json() as { results?: Array<{ urls?: { regular?: string } }> }
+    return data.results?.[0]?.urls?.regular || null
+  } catch { return null }
+}
+
+async function fillSlideImages(slides: Array<{ imageUrl?: string; imageKeyword?: string; layout?: string }>): Promise<void> {
+  if (!process.env.UNSPLASH_ACCESS_KEY) return
+  const tasks = slides.map(async (slide) => {
+    if (slide.imageKeyword && !slide.imageUrl) {
+      const url = await searchUnsplashImage(slide.imageKeyword)
+      if (url) slide.imageUrl = url
+    }
+  })
+  await Promise.all(tasks)
+}
+
 // ── Notion API 연동
 const NOTION_QUICKBIZLAB_PAGE_ID = '2bc67a0561d581f784a1db047bf29080'
 const NOTION_REPORT_PAGE_ID = '3d467a0561d581a79a6dde2d7924ce24'
@@ -1045,19 +1071,21 @@ const CONTENT_PROMPTS: Record<ContentType, string> = {
 - 슬라이드 수: 콘텐츠 양에 맞게 5~15장 자유 결정 (억지로 늘리거나 줄이지 말 것)
 - 첫 장: cover (임팩트 있는 제목 + 부제)
 - 중간: 핵심 내용 — 아래 5종 레이아웃을 주제에 맞게 다양하게 배치
-  - list: 제목 + 항목 리스트 (items에 label/value 쌍, 2~4개)
-  - stat: 핵심 수치 강조 (items 첫번째: label=설명, value=숫자)
-  - quote: 인용/명언 (title=출처, body=인용문)
-  - table: 표 형식 (items에 label/value 쌍)
-  - photo: 사진 위 제목+부제 (title/body만)
+  - list: 제목 + 항목 리스트 (items에 label/value 쌍, 2~4개). value는 반드시 1~2문장 설명 포함
+  - stat: 핵심 수치 강조 (items 첫번째: label=설명 1문장, value=숫자+단위). title은 짧게 (15자 이내)
+  - quote: 인용/명언 (title=출처, body=인용문 2~3문장)
+  - table: 비교 표 (items에 label/value 쌍, 3~5개)
+  - photo: 사진 위 제목+부제 (title 15자 이내, body 1~2문장)
 - 마지막 장: outro (마무리 카피 + CTA)
 - 같은 레이아웃 연속 2번 사용 금지 — 반드시 다양하게
 - **title에서 강조하고 싶은 단어는 **별표**로 감싸기** (예: "**7장**이면 충분해요")
-- 각 슬라이드에 어울리는 이모지 1개
+- title은 15자 이내로 짧고 임팩트 있게. 긴 설명은 body나 items에
+- 이모지: cover와 outro에만 1개씩. 중간 슬라이드에는 이모지 불필요
+- imageKeyword: 각 슬라이드에 배경 이미지 검색용 영어 키워드 1~2단어 (예: "coding laptop", "data chart", "team meeting")
 - 해시태그 5개
 
 출력: 순수 JSON만 (설명 없이, 코드블록 없이):
-{"slides":[{"title":"**핵심** 포인트","body":"본문","emoji":"🚀","layout":"list","items":[{"label":"소제목","value":"설명 1~2문장"}]},{"title":"놀라운 수치","emoji":"📊","layout":"stat","items":[{"label":"월 성장률","value":"35%"}]},{"title":"출처","body":"핵심 인용문","emoji":"💬","layout":"quote"}],"hashtags":["키워드1","키워드2"]}`,
+{"slides":[{"title":"**핵심** 포인트","body":"본문","layout":"list","imageKeyword":"technology workspace","items":[{"label":"소제목","value":"설명 1~2문장"}]},{"title":"놀라운 수치","layout":"stat","imageKeyword":"data analytics","items":[{"label":"월간 활성 사용자 증가율","value":"35%"}]},{"title":"출처","body":"핵심 인용문 2~3문장","layout":"quote","imageKeyword":"inspiration"}],"hashtags":["키워드1","키워드2"]}`,
 
   newsletter: `HTML 이메일 뉴스레터를 생성하세요.
 
@@ -1132,7 +1160,8 @@ QuickBizLab 브랜드로 작성하세요. 전문적이면서 친근한 톤.`
   if (contentType === 'cardnews') {
     try {
       const jsonStr = content.replace(/```json?\n?/g, '').replace(/```/g, '').trim()
-      const parsed = JSON.parse(jsonStr) as { slides: Array<{ title: string; body: string; emoji?: string }>; hashtags?: string[] }
+      const parsed = JSON.parse(jsonStr) as { slides: Array<{ title: string; body: string; emoji?: string; imageKeyword?: string; imageUrl?: string }>; hashtags?: string[] }
+      await fillSlideImages(parsed.slides)
       cardnewsData = parsed
       // Notion용 마크다운 변환
       notionContent = parsed.slides.map((s, i) =>
