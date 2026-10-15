@@ -248,7 +248,10 @@ async function searchUnsplashImage(query: string): Promise<string | null> {
 }
 
 async function fillSlideImages(slides: Array<{ imageUrl?: string; imageKeyword?: string; layout?: string }>): Promise<void> {
-  if (!process.env.UNSPLASH_ACCESS_KEY) return
+  if (!process.env.UNSPLASH_ACCESS_KEY) {
+    console.log('[fillSlideImages] UNSPLASH_ACCESS_KEY not set, skipping')
+    return
+  }
   const imageLayouts = new Set(['cover', 'photo'])
   const tasks = slides.map(async (slide) => {
     if (!imageLayouts.has(slide.layout || '')) {
@@ -257,8 +260,16 @@ async function fillSlideImages(slides: Array<{ imageUrl?: string; imageKeyword?:
       return
     }
     if (slide.imageKeyword && !slide.imageUrl) {
+      console.log(`[fillSlideImages] searching: "${slide.imageKeyword}" for layout=${slide.layout}`)
       const url = await searchUnsplashImage(slide.imageKeyword)
-      if (url) slide.imageUrl = url
+      if (url) {
+        slide.imageUrl = url
+        console.log(`[fillSlideImages] found image for "${slide.imageKeyword}"`)
+      } else {
+        console.log(`[fillSlideImages] no image found for "${slide.imageKeyword}"`)
+      }
+    } else if (!slide.imageKeyword) {
+      console.log(`[fillSlideImages] no imageKeyword for layout=${slide.layout}, skipping`)
     }
   })
   await Promise.all(tasks)
@@ -1073,26 +1084,29 @@ function detectContentType(msg: string): ContentType | null {
 const CONTENT_PROMPTS: Record<ContentType, string> = {
   cardnews: `SNS 카드뉴스를 JSON으로 생성하세요. 1080x1350 (4:5) 인스타그램 캐러셀.
 
+톤: 후킹형 — 독자의 호기심을 자극하는 질문형/도발형 카피. "~하고 계신가요?", "~없이 어떻게?", "~만 알면 됩니다" 같은 후킹 문구 사용. 정보를 나열하지 말고 읽는 사람이 "다음 장 넘겨야지"라고 느끼게 작성.
+
 규칙:
-- 슬라이드 수: 콘텐츠 양에 맞게 5~15장 자유 결정 (억지로 늘리거나 줄이지 말 것)
-- 첫 장: cover (임팩트 있는 제목 + 부제 2~3문장)
+- 슬라이드 수: 7~12장 (최소 7장, 내용 충분히 분배)
+- 첫 장: cover (질문형/도발형 후킹 제목 + 부제 2~3문장). imageKeyword 필수. kicker에 프로젝트/도구 이름
 - 중간: 핵심 내용 — 아래 5종 레이아웃을 주제에 맞게 다양하게 배치
   - list: 제목 + 항목 리스트 (items 3~4개 필수). 각 item의 label은 소제목, value는 반드시 2문장 이상 충분한 설명
-  - stat: 핵심 수치 강조 (items 첫번째: label=2문장 설명, value=숫자+단위). title은 10자 이내
-  - quote: 인용/명언 (title=출처, body=인용문 3~4문장으로 충분히 길게)
-  - table: 비교 표 (items 4~6개, label/value 쌍)
-  - photo: 사진 위 제목+부제 (title 10자 이내, body 2~3문장)
-- 마지막 장: outro (마무리 카피 + CTA 문구는 10자 이내로 짧게)
+  - stat: 핵심 수치 강조 (items 첫번째: label=3문장 이상 충분한 설명, value=숫자+단위). title은 10자 이내
+  - quote: 인용/활용 사례 (title=출처나 소제목, body=4~5문장으로 충분히 길게). 실제 활용 시나리오를 구체적으로
+  - table: 비교 표 (items 5~6개, label/value 쌍). 테이블 행 충분히
+  - photo: 사진 위 제목+부제 (title 10자 이내, body 3~4문장). imageKeyword 필수
+- 마지막 장: outro (행동 유도 카피 + CTA 문구는 10자 이내로 짧게)
 - 같은 레이아웃 연속 2번 사용 금지 — 반드시 다양하게
-- **title에서 강조 단어는 **별표**로 감싸기** (예: "**7장**이면 충분해요")
+- photo 레이아웃 최소 1장 포함
+- **title에서 강조 단어는 **별표**로 감싸기** (예: "**소스 코드** 없이")
 - title은 10자 이내. 긴 설명은 body나 items에
 - 이모지: 사용하지 마세요 (emoji 필드 비워두기)
-- imageKeyword: cover와 photo 레이아웃에만 배경 이미지 검색용 영어 키워드 1~2단어 (예: "coding laptop", "data chart"). 반드시 포함할 것. 나머지 레이아웃에는 imageKeyword 넣지 마세요
+- imageKeyword: cover와 photo 레이아웃에 반드시 영어 키워드 1~2단어 포함 (예: "coding laptop", "data chart"). 이 필드 없으면 배경 이미지 로드 불가하므로 절대 빠뜨리지 마세요. 나머지 레이아웃에는 imageKeyword 넣지 마세요
 - 해시태그 5개
-- 중요: 각 슬라이드의 텍스트가 카드를 충분히 채울 만큼 작성하세요. 빈 공간이 많으면 안 됩니다
+- 중요: 각 슬라이드의 텍스트가 카드를 충분히 채울 만큼 작성하세요. 빈 공간이 많으면 안 됩니다. stat의 label, quote의 body 등 텍스트 분량을 넉넉히
 
 출력: 순수 JSON만 (설명 없이, 코드블록 없이):
-{"slides":[{"title":"**핵심** 기능","body":"","layout":"cover","imageKeyword":"ai technology dark"},{"title":"주요 기능","body":"","layout":"list","items":[{"label":"자율 에이전트","value":"프롬프트 하나로 터미널에서 코드 작성부터 디버깅까지 자동 수행합니다. 별도 설정 없이 바로 사용 가능합니다."},{"label":"파일 시스템","value":"로컬 프로젝트 구조를 완벽하게 이해하고 필요한 파일을 직접 수정합니다. Git 연동도 지원합니다."},{"label":"테스트 자동화","value":"코드 변경 후 자동으로 테스트를 실행하고 결과를 분석합니다. 실패 시 자동 수정도 가능합니다."}]},{"title":"성장세","layout":"stat","items":[{"label":"출시 3개월 만에 전 세계 개발자들이 채택한 폭발적인 성장률입니다.","value":"17,000+"}]},{"title":"실무 적용 사례","body":"반복적인 보일러플레이트 코드 작성 시간이 획기적으로 줄었습니다. 개발자는 더 창의적인 아키텍처 설계에 집중할 수 있는 환경이 만들어집니다.","layout":"quote"},{"title":"**시작**하기","body":"최신 AI 기술로 업무 생산성을 극대화하세요.","layout":"outro","cta":"무료 체험"}],"hashtags":["AI코딩","개발자생산성","ClaudeEngineer","깃허브트렌딩","QuickBizLab"]}`,
+{"slides":[{"title":"**소스 코드** 없는 앱, 어떻게 분석할까?","body":"바이너리부터 웹까지 분석하는 하나의 MCP, REA","layout":"cover","kicker":"Reverse Engineer Anything","imageKeyword":"code analysis dark"},{"title":"REA란?","body":"","layout":"list","items":[{"label":"소스 코드 불필요","value":"앱의 동작 방식을 파악하고 증거를 수집해 필요한 기능을 내 프로젝트에 구현합니다. 추측이 아닌 실제 동작 기반 분석입니다."},{"label":"로컬 분석 환경","value":"모든 분석은 로컬에서 실행되며 각 결론에 대한 증거와 한계점을 함께 제공합니다. 보안 걱정 없이 안전하게 분석할 수 있습니다."},{"label":"AI 에이전트 연동","value":"단 한 줄의 명령어로 에이전트에 REA를 등록하고 곧바로 분석 작업을 시작할 수 있습니다. 복잡한 설정이 필요 없습니다."}]},{"title":"에이전트 연동","body":"단 한 줄의 명령어로 AI 에이전트에 REA를 등록하고 분석을 시작하세요. 내 프로젝트에 유사한 기능을 구현할 수 있도록 구체적인 빌드 방향까지 지원합니다.","layout":"quote","title":"에이전트 활용"},{"title":"트렌드 지표","layout":"stat","items":[{"label":"글로벌 개발자 생태계에서 폭발적인 관심과 압도적인 인기를 증명하는 수치입니다. 리버스 엔지니어링 도구 중 가장 빠르게 성장하고 있습니다.","value":"250K+"}]},{"title":"**다양한** 분석","body":"","layout":"list","items":[{"label":"네이티브 & 자바스크립트","value":"네이티브 바이너리부터 일렉트론 앱, 웹사이트까지 폭넓게 분석할 수 있습니다. 프로그램 구조와 웹 기능을 동시에 파악합니다."},{"label":"데이터베이스 및 펌웨어","value":"SQLite 데이터베이스, 안드로이드 APK, 펌웨어 영역까지 지원합니다. 모바일 앱과 임베디드 기기도 분석 가능합니다."}]},{"title":"실전 활용","body":"보고 싶은 앱의 기능을 에이전트에게 요청하면 REA가 소스 코드 없이도 작동 방식을 조사하고 증거를 제시합니다. 실무에서 바로 적용할 수 있는 분석 결과를 받아보세요.","layout":"photo","imageKeyword":"developer workspace"},{"title":"지금 바로 **시작**","body":"npx rea-agents setup으로 에이전트를 설정하세요","layout":"outro","cta":"시작하기"}],"hashtags":["리버스엔지니어링","개발자도구","MCP","AI에이전트","프로그래밍"]}`,
 
   newsletter: `HTML 이메일 뉴스레터를 생성하세요.
 
@@ -1139,6 +1153,7 @@ interface ContentResult {
   notionPageId?: string
   cardnewsData?: { slides: Array<{ title: string; body: string; emoji?: string }>; hashtags?: string[] }
   imageReady?: boolean
+  detailPageUrl?: string
 }
 
 async function generateContent(
@@ -1155,7 +1170,7 @@ ${context ? `참고 맥락:\n${context}\n` : ''}
 ${hasUrlAnalysis ? `**중요**: 위 "참고 맥락"에 URL/GitHub에서 가져온 실제 내용이 있습니다. 반드시 그 내용을 정확히 기반으로 작성하세요. 맥락에 없는 내용을 지어내지 마세요. 프로젝트 이름, 기능, 수치 등 모두 실제 README/페이지 내용과 일치해야 합니다.\n` : ''}
 ${CONTENT_PROMPTS[contentType]}
 
-QuickBizLab 브랜드로 작성하세요. 전문적이면서 친근한 톤.`
+QuickBizLab 브랜드로 작성하세요. 후킹형 톤: 질문형/도발형 카피로 독자 호기심을 자극하고 다음 장을 넘기고 싶게 만드세요.`
 
   const { reply: content, model } = await aiChat(prompt, 45, undefined, undefined, 6000)
   if (model === 'fallback' || !content) return null
@@ -1190,6 +1205,20 @@ QuickBizLab 브랜드로 작성하세요. 전문적이면서 친근한 톤.`
   const result = await notionCreatePage(parentId, title, notionContent, emoji)
   if (!result) return null
 
+  // 카드뉴스 → 팔로워용 Notion 상세 페이지 자동 생성
+  let detailPageUrl: string | undefined
+  if (contentType === 'cardnews' && cardnewsData) {
+    try {
+      const detailPage = await generateNotionDetailPage(topic, context, dept, employeeName, role)
+      if (detailPage) {
+        const detailResult = await notionCreatePage(result.id, detailPage.title, detailPage.content, '📖')
+        if (detailResult) detailPageUrl = detailResult.url
+      }
+    } catch (e) {
+      console.log('[content] detail page generation failed:', e)
+    }
+  }
+
   return {
     type: typeLabel[contentType],
     title,
@@ -1198,7 +1227,45 @@ QuickBizLab 브랜드로 작성하세요. 전문적이면서 친근한 톤.`
     notionPageId: result.id,
     cardnewsData,
     imageReady: !!cardnewsData,
+    detailPageUrl,
   }
+}
+
+async function generateNotionDetailPage(
+  topic: string, context: string, dept: string, employeeName: string, role: string
+): Promise<{ title: string; content: string } | null> {
+  const prompt = `당신은 AI 회사 "QuickBizLab"의 ${dept} 부서 ${role} "${employeeName}"입니다.
+
+대표님 요청: "${topic}"
+${context ? `참고 맥락:\n${context}\n` : ''}
+
+위 주제로 팔로워에게 보낼 Notion 상세 가이드 페이지를 Markdown으로 작성하세요.
+
+형식 (반드시 준수):
+1. 제목: 후킹형 질문으로 시작 (## H2 레벨)
+2. 도입부: 2~3문장으로 독자의 공감 유도 + 이 가이드에서 배울 내용 요약
+3. STEP 섹션 3~5개:
+   - "## STEP N. [제목]" 형식
+   - 각 STEP에 번호 리스트 (1. 2. 3.) 3~4개
+   - 각 STEP 끝에 > 💡 **Tip:** 또는 > ✅ **주의사항:** 블록쿼트 1개
+4. 비교 테이블 1개 (마크다운 테이블 형식, 3열 이상)
+5. 코드 블록이 있으면 \`\`\`bash 형식으로
+6. "## 막혔을 때" 섹션: DM 유도 1~2문장
+7. 마지막: 구분선(---) + 💬 DM CTA 블록:
+   > 💬 궁금한 점이나 협업 문의는 인스타그램 DM으로 편하게 보내주세요!
+   > 👉 [지금 바로 DM 보내기](https://ig.me/m/quickbizlab.ai)
+
+톤: 친근하면서 전문적. "~해요" 체 사용. 후킹형 소제목.
+분량: 800~1500자.
+출력: 순수 Markdown만. 설명이나 코드블록 래퍼 없이.`
+
+  const { reply, model } = await aiChat(prompt, 45, undefined, undefined, 4000)
+  if (model === 'fallback' || !reply) return null
+
+  const titleMatch = reply.match(/^##\s+(.+)/m)
+  const title = titleMatch ? titleMatch[1].trim() : `${topic.slice(0, 30)} 상세 가이드`
+
+  return { title, content: reply }
 }
 
 export async function POST(req: NextRequest) {

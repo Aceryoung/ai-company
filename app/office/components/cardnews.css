@@ -30,12 +30,13 @@
 .cn-card .c-top{display:flex;justify-content:space-between;align-items:center;gap:24px;flex:none;margin-bottom:28px}
 .cn-card .c-brand{font-size:30px;font-weight:800;color:var(--c-hl);position:absolute;bottom:80px;right:80px;z-index:2;text-align:right}
 .cn-card .c-page{font-size:28px;font-weight:700;color:var(--c-sub);white-space:nowrap}
-.cn-card .c-main{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;justify-content:center}
+.cn-card .c-main{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;justify-content:flex-end}
 .cn-card .c-deco{display:block;flex:none}
 
 .cn-card .c-kicker{font-size:32px;font-weight:800;align-self:flex-start;margin-bottom:30px}
 .cn-card .c-title{font-size:72px;font-weight:900;line-height:1.22;letter-spacing:-.025em}
 .cn-card .c-sub{font-size:40px;line-height:1.5;color:var(--c-sub);margin-top:32px;font-weight:500}
+.cn-card.l-cover .c-main{justify-content:center}
 .cn-card.l-cover .c-title{font-size:100px;line-height:1.16}
 .cn-card .c-items{display:flex;flex-direction:column;gap:38px;margin-top:52px}
 .cn-card .c-item{display:flex;gap:28px;align-items:flex-start}
