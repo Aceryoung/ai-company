@@ -1207,8 +1207,14 @@ QuickBizLab 브랜드로 작성하세요. 후킹형 톤: 질문형/도발형 카
     try {
       const jsonStr = content.replace(/```json?\n?/g, '').replace(/```/g, '').trim()
       const raw = JSON.parse(jsonStr) as Record<string, unknown>
+      console.log('[cardnews] RAW JSON keys:', Object.keys(raw))
       const slides = (raw.cards || raw.slides) as Array<Record<string, unknown>>
       if (!slides || !Array.isArray(slides)) throw new Error('no cards/slides array')
+      console.log('[cardnews] slides count:', slides.length)
+      slides.forEach((s, i) => {
+        console.log(`[cardnews] slide[${i}] layout=${s.layout} keys=${Object.keys(s).join(',')}`)
+        if (s.items) console.log(`[cardnews] slide[${i}].items RAW:`, JSON.stringify(s.items).slice(0, 300))
+      })
       const hashtags = (raw.hashtags as string[]) || []
       const parsed = { slides, hashtags }
       for (const slide of parsed.slides) {

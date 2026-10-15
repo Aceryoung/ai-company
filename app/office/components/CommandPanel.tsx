@@ -79,7 +79,7 @@ export function CommandPanel({ isMobile, onSwitchToOffice }: Props) {
   } | null>(null)
   const [contentPreview, setContentPreview] = useState<{
     type: string; title: string; html: string; url: string; notionPageId?: string
-    cardnewsData?: { slides: Array<{ title: string; body: string; emoji?: string; layout?: string; imageUrl?: string; cta?: string; items?: Array<{ label: string; value?: string; checked?: boolean; date?: string }> }>; hashtags?: string[] }
+    cardnewsData?: { slides: Array<Record<string, unknown>>; hashtags?: string[] }
     imageReady?: boolean
   } | null>(null)
   const [generatingImages, setGeneratingImages] = useState(false)
@@ -133,7 +133,7 @@ export function CommandPanel({ isMobile, onSwitchToOffice }: Props) {
   const addSlideItem = (slideIdx: number) => {
     if (!contentPreview?.cardnewsData) return
     const slides = [...contentPreview.cardnewsData.slides]
-    const items = [...(slides[slideIdx].items || []), { label: '항목', value: '' }]
+    const items = [...((slides[slideIdx].items as Record<string, unknown>[]) || []), { head: '항목', body: '' }]
     slides[slideIdx] = { ...slides[slideIdx], items }
     setContentPreview({ ...contentPreview, cardnewsData: { ...contentPreview.cardnewsData, slides } })
   }
@@ -156,18 +156,21 @@ export function CommandPanel({ isMobile, onSwitchToOffice }: Props) {
     }
     return {
       brand: 'QuickBizLab',
-      tags: data.hashtags?.map(h => `#${h}`).join(' ') || '',
-      slides: data.slides.map(s => ({
-        layout: layoutMap[s.layout || 'list'] || 'list',
-        title: s.title,
-        sub: s.body || undefined,
-        kicker: s.emoji || undefined,
-        quote: s.layout === 'quote' ? s.body : undefined,
-        number: s.layout === 'stat' || s.layout === 'stats' ? s.items?.[0]?.value : undefined,
-        desc: s.layout === 'stat' || s.layout === 'stats' ? s.items?.[0]?.label : undefined,
-        cta: s.layout === 'cta' || s.layout === 'outro' ? (s.cta || '자세히 보기') : undefined,
-        imageUrl: s.imageUrl || undefined,
-        items: s.items?.map(it => ({ head: it.label, body: it.value || '' })),
+      tags: data.hashtags?.map(h => h.startsWith('#') ? h : `#${h}`).join(' ') || '',
+      slides: data.slides.map((s: Record<string, unknown>) => ({
+        layout: layoutMap[String(s.layout || 'list')] || 'list',
+        title: String(s.title || ''),
+        sub: String(s.sub || s.body || '') || undefined,
+        kicker: String(s.kicker || s.emoji || '') || undefined,
+        quote: String(s.quote || '') || undefined,
+        number: String(s.number || '') || undefined,
+        desc: String(s.desc || '') || undefined,
+        cta: String(s.cta || '') || undefined,
+        imageUrl: String(s.imageUrl || '') || undefined,
+        items: Array.isArray(s.items) ? (s.items as Record<string, unknown>[]).map(it => ({
+          head: String(it.head || it.label || ''),
+          body: String(it.body || it.value || ''),
+        })) : undefined,
       })),
     }
   }, [])
@@ -1545,7 +1548,7 @@ export function CommandPanel({ isMobile, onSwitchToOffice }: Props) {
                         </div>
                         {slide.emoji && <div className="text-2xl mb-1">{slide.emoji}</div>}
                         <div className={`font-bold text-sm mb-1 ${i === 0 || i === contentPreview.cardnewsData!.slides.length - 1 ? 'text-white' : 'text-[#4af]'}`}>{slide.title}</div>
-                        {slide.body && <div className="text-xs leading-relaxed">{slide.body}</div>}
+                        {(slide.sub || slide.body) && <div className="text-xs leading-relaxed">{String(slide.sub || slide.body || '')}</div>}
                         {slide.imageUrl && <div className="text-[10px] text-green-400 mt-1">🖼️ 이미지: {slide.imageUrl.slice(0, 40)}...</div>}
                         {slide.items && slide.items.length > 0 && (
                           <div className="mt-2 space-y-1">
@@ -1553,8 +1556,8 @@ export function CommandPanel({ isMobile, onSwitchToOffice }: Props) {
                               <div key={j} className="text-[10px] text-[#94a3b8] flex gap-1">
                                 {slide.layout === 'checklist' && <span>{item.checked ? '✅' : '⬜'}</span>}
                                 {item.date && <span className="text-[#6b8cbb]">{item.date}</span>}
-                                <span>{item.label}</span>
-                                {item.value && <span className="ml-auto text-[#4af]">{item.value}</span>}
+                                <span>{String(item.head || item.label || '')}</span>
+                                {(item.body || item.value) && <span className="ml-auto text-[#4af]">{String(item.body || item.value || '')}</span>}
                               </div>
                             ))}
                             {slide.items.length > 3 && <div className="text-[9px] text-white/50">+{slide.items.length - 3}개 더</div>}
@@ -1636,14 +1639,14 @@ export function CommandPanel({ isMobile, onSwitchToOffice }: Props) {
                                     />
                                   )}
                                   <input
-                                    value={item.label}
-                                    onChange={e => updateSlideItem(i, j, { label: e.target.value })}
+                                    value={String(item.head || item.label || '')}
+                                    onChange={e => updateSlideItem(i, j, { head: e.target.value })}
                                     className="flex-1 bg-[#1a2a3f] border border-[#2a3a5f] rounded px-1 py-0.5 text-[10px] text-[#e2e8f0]"
                                     placeholder="항목명"
                                   />
                                   <input
-                                    value={item.value || ''}
-                                    onChange={e => updateSlideItem(i, j, { value: e.target.value })}
+                                    value={String(item.body || item.value || '')}
+                                    onChange={e => updateSlideItem(i, j, { body: e.target.value })}
                                     className="w-20 bg-[#1a2a3f] border border-[#2a3a5f] rounded px-1 py-0.5 text-[10px] text-[#4af]"
                                     placeholder="값"
                                   />
