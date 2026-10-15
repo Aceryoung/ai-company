@@ -1095,29 +1095,39 @@ function detectContentType(msg: string): ContentType | null {
 const CONTENT_PROMPTS: Record<ContentType, string> = {
   cardnews: `SNS 카드뉴스를 JSON으로 생성하세요. 1080x1350 (4:5) 인스타그램 캐러셀.
 
-톤: 후킹형 — 독자의 호기심을 자극하는 질문형/도발형 카피. "~하고 계신가요?", "~없이 어떻게?", "~만 알면 됩니다" 같은 후킹 문구 사용. 정보를 나열하지 말고 읽는 사람이 "다음 장 넘겨야지"라고 느끼게 작성.
+톤: 후킹형 — 질문형/도발형 카피로 호기심 자극. "~하고 계신가요?", "~없이 어떻게?" 등.
 
-규칙:
-- 슬라이드 수: 7~12장 (최소 7장, 내용 충분히 분배)
-- 첫 장: cover (질문형/도발형 후킹 제목 + 부제 2~3문장). imageKeyword 필수. kicker에 프로젝트/도구 이름
-- 중간: 핵심 내용 — 아래 5종 레이아웃을 주제에 맞게 다양하게 배치
-  - list: 제목 + 항목 리스트 (items 3~4개 필수). 각 item의 label은 소제목, value는 반드시 2문장 이상 충분한 설명
-  - stat: 핵심 수치 강조 (items 첫번째: label=3문장 이상 충분한 설명, value=숫자+단위). title은 10자 이내
-  - quote: 인용/활용 사례 (title=출처나 소제목, body=4~5문장으로 충분히 길게). 실제 활용 시나리오를 구체적으로
-  - table: 비교 표 (items 5~6개, label/value 쌍). 테이블 행 충분히
-  - photo: 사진 위 제목+부제 (title 10자 이내, body 3~4문장). imageKeyword 필수
-- 마지막 장: outro (행동 유도 카피 + CTA 문구는 10자 이내로 짧게)
-- 같은 레이아웃 연속 2번 사용 금지 — 반드시 다양하게
-- photo 레이아웃 최소 1장 포함
-- **title에서 강조 단어는 **별표**로 감싸기** (예: "**소스 코드** 없이")
-- title은 10자 이내. 긴 설명은 body나 items에
-- 이모지: 사용하지 마세요 (emoji 필드 비워두기)
-- imageKeyword: cover와 photo 레이아웃에 반드시 영어 키워드 1~2단어 포함 (예: "coding laptop", "data chart"). 이 필드 없으면 배경 이미지 로드 불가하므로 절대 빠뜨리지 마세요. 나머지 레이아웃에는 imageKeyword 넣지 마세요
+■ 글자수 제한 (엄격히 준수 — 초과하면 카드가 깨집니다):
+- title: 최대 15자 (강조 **별표** 제외)
+- kicker: 최대 20자
+- body/sub: 최대 60자 (1~2문장)
+- items의 label(head): 최대 12자
+- items의 value(body): 최대 50자 (1문장)
+- quote: 최대 80자
+- number(value): 숫자+단위만 (예: "50K+", "90%")
+- desc: 최대 60자
+- cta: 최대 8자
+- stat의 title(kicker): 최대 8자
+
+■ 레이아웃 규칙:
+- 슬라이드 수: 7~10장
+- 첫 장: cover (후킹 제목 + 짧은 부제). imageKeyword 필수. kicker에 프로젝트명
+- 중간 5종 레이아웃 다양하게:
+  - list: 제목 + items 3개. head=소제목, body=한 문장 설명
+  - stat: kicker=카테고리, number=숫자, desc=한 문장 설명
+  - quote: 인용문 + title=출처
+  - table: items 4~5개 (head/body 쌍)
+  - photo: 짧은 제목+부제. imageKeyword 필수
+- 마지막: outro (CTA 포함)
+- 같은 레이아웃 연속 금지
+- photo 최소 1장
+- title 강조: **별표** 감싸기
+- 이모지 사용 금지
+- imageKeyword: cover/photo에만 영어 1~2단어
 - 해시태그 5개
-- 중요: 각 슬라이드의 텍스트가 카드를 충분히 채울 만큼 작성하세요. 빈 공간이 많으면 안 됩니다. stat의 label, quote의 body 등 텍스트 분량을 넉넉히
 
-출력: 순수 JSON만 (설명 없이, 코드블록 없이):
-{"slides":[{"title":"**소스 코드** 없는 앱, 어떻게 분석할까?","body":"바이너리부터 웹까지 분석하는 하나의 MCP, REA","layout":"cover","kicker":"Reverse Engineer Anything","imageKeyword":"code analysis dark"},{"title":"REA란?","body":"","layout":"list","items":[{"label":"소스 코드 불필요","value":"앱의 동작 방식을 파악하고 증거를 수집해 필요한 기능을 내 프로젝트에 구현합니다. 추측이 아닌 실제 동작 기반 분석입니다."},{"label":"로컬 분석 환경","value":"모든 분석은 로컬에서 실행되며 각 결론에 대한 증거와 한계점을 함께 제공합니다. 보안 걱정 없이 안전하게 분석할 수 있습니다."},{"label":"AI 에이전트 연동","value":"단 한 줄의 명령어로 에이전트에 REA를 등록하고 곧바로 분석 작업을 시작할 수 있습니다. 복잡한 설정이 필요 없습니다."}]},{"title":"에이전트 연동","body":"단 한 줄의 명령어로 AI 에이전트에 REA를 등록하고 분석을 시작하세요. 내 프로젝트에 유사한 기능을 구현할 수 있도록 구체적인 빌드 방향까지 지원합니다.","layout":"quote","title":"에이전트 활용"},{"title":"트렌드 지표","layout":"stat","items":[{"label":"글로벌 개발자 생태계에서 폭발적인 관심과 압도적인 인기를 증명하는 수치입니다. 리버스 엔지니어링 도구 중 가장 빠르게 성장하고 있습니다.","value":"250K+"}]},{"title":"**다양한** 분석","body":"","layout":"list","items":[{"label":"네이티브 & 자바스크립트","value":"네이티브 바이너리부터 일렉트론 앱, 웹사이트까지 폭넓게 분석할 수 있습니다. 프로그램 구조와 웹 기능을 동시에 파악합니다."},{"label":"데이터베이스 및 펌웨어","value":"SQLite 데이터베이스, 안드로이드 APK, 펌웨어 영역까지 지원합니다. 모바일 앱과 임베디드 기기도 분석 가능합니다."}]},{"title":"실전 활용","body":"보고 싶은 앱의 기능을 에이전트에게 요청하면 REA가 소스 코드 없이도 작동 방식을 조사하고 증거를 제시합니다. 실무에서 바로 적용할 수 있는 분석 결과를 받아보세요.","layout":"photo","imageKeyword":"developer workspace"},{"title":"지금 바로 **시작**","body":"npx rea-agents setup으로 에이전트를 설정하세요","layout":"outro","cta":"시작하기"}],"hashtags":["리버스엔지니어링","개발자도구","MCP","AI에이전트","프로그래밍"]}`,
+출력: 순수 JSON만 (설명/코드블록 없이):
+{"slides":[{"layout":"cover","kicker":"REA","title":"**소스 코드** 없이 분석?","sub":"바이너리부터 웹까지 한번에","imageKeyword":"code analysis"},{"layout":"list","title":"핵심 기능","items":[{"head":"소스 불필요","body":"실제 동작 기반으로 분석합니다"},{"head":"로컬 실행","body":"보안 걱정 없이 안전하게"},{"head":"AI 연동","body":"한 줄로 에이전트 등록"}]},{"layout":"stat","kicker":"성장 지표","title":"","number":"250K+","desc":"글로벌 개발자 커뮤니티 스타"},{"layout":"table","title":"차원이 다른 비교","items":[{"head":"실행 환경","body":"로컬 PC 직접 실행"},{"head":"용량 제한","body":"제한 없음"},{"head":"인터넷","body":"오프라인 가능"}]},{"layout":"quote","quote":"터미널 하나로 반복 업무 90% 자동화","title":"실제 활용"},{"layout":"photo","title":"자동화의 혁신","sub":"누구나 쉽게 시작하는 AI 도구","imageKeyword":"developer workspace"},{"layout":"outro","title":"지금 바로 **도전**","sub":"터미널 열고 시작하세요","cta":"시작하기"}],"hashtags":["개발자도구","자동화","AI","오픈소스","프로그래밍"]}`,
 
   newsletter: `HTML 이메일 뉴스레터를 생성하세요.
 
@@ -1208,9 +1218,22 @@ QuickBizLab 브랜드로 작성하세요. 후킹형 톤: 질문형/도발형 카
   if (contentType === 'cardnews') {
     try {
       const jsonStr = content.replace(/```json?\n?/g, '').replace(/```/g, '').trim()
-      const parsed = JSON.parse(jsonStr) as { slides: Array<{ title: string; body: string; emoji?: string; imageKeyword?: string; imageUrl?: string }>; hashtags?: string[] }
-      await fillSlideImages(parsed.slides)
-      cardnewsData = parsed
+      const parsed = JSON.parse(jsonStr) as { slides: Array<Record<string, unknown>>; hashtags?: string[] }
+      for (const slide of parsed.slides) {
+        if (slide.items && Array.isArray(slide.items)) {
+          const items = slide.items as Record<string, unknown>[]
+          if (slide.layout === 'stat' && items.length > 0 && !slide.number) {
+            slide.number = items[0].value || items[0].body || ''
+            slide.desc = items[0].label || items[0].head || ''
+          }
+          slide.items = items.map(it => ({
+            head: it.head || it.label || '',
+            body: it.body || it.value || '',
+          }))
+        }
+      }
+      await fillSlideImages(parsed.slides as Array<{ imageKeyword?: string; imageUrl?: string }>)
+      cardnewsData = parsed as ContentResult['cardnewsData']
       // Notion용 마크다운 변환
       notionContent = parsed.slides.map((s, i) =>
         `## 슬라이드 ${i + 1} ${s.emoji || ''}\n**${s.title}**\n${s.body}`

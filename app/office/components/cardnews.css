@@ -182,5 +182,15 @@
 .cn-card.t-pop .c-page{background:rgba(255,255,255,.15);padding:4px 16px;border-radius:999px}
 .cn-card.t-pop .c-table{border-color:var(--c-hl)}
 
+/* ── overflow 안전장치 ── */
+.cn-card .c-title{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.cn-card.l-cover .c-title{-webkit-line-clamp:3}
+.cn-card.l-outro .c-title{-webkit-line-clamp:3}
+.cn-card .c-sub{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.cn-card .c-desc{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.cn-card .c-ib{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.cn-card .c-quote{display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden}
+.cn-card .c-main{overflow:hidden}
+
 /* ── 캡처용 숨김 호스트 ── */
 .cn-shot-host{position:fixed;left:-20000px;top:0;width:1080px;pointer-events:none;z-index:-1}
