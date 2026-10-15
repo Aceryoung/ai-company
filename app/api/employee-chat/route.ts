@@ -312,28 +312,31 @@ async function fetchGitHubContent(owner: string, repo: string, branch?: string):
   const ghToken = process.env.GITHUB_TOKEN
   const headers: Record<string, string> = { Accept: 'application/vnd.github+json' }
   if (ghToken) headers.Authorization = `Bearer ${ghToken}`
+  console.log(`[fetchGitHubContent] ${owner}/${repo} (token: ${ghToken ? 'yes' : 'NO'})`)
 
   try {
-    // 1) repo 메타데이터
     const metaRes = await fetch(`https://api.github.com/repos/${owner}/${repo}`, {
       headers, signal: AbortSignal.timeout(10_000),
     })
-    if (!metaRes.ok) return null
+    if (!metaRes.ok) {
+      console.log(`[fetchGitHubContent] meta fetch failed: ${metaRes.status}`)
+      return null
+    }
     const meta = await metaRes.json() as {
       description?: string; stargazers_count?: number; language?: string
       topics?: string[]; default_branch?: string
     }
+    console.log(`[fetchGitHubContent] meta OK: ${meta.description?.slice(0, 60)}`)
 
     const ref = branch || meta.default_branch || 'main'
 
-    // 2) README
     const readmeRes = await fetch(
       `https://api.github.com/repos/${owner}/${repo}/readme?ref=${ref}`,
       { headers: { ...headers, Accept: 'application/vnd.github.raw+json' }, signal: AbortSignal.timeout(10_000) },
     )
     const readme = readmeRes.ok ? await readmeRes.text() : ''
+    console.log(`[fetchGitHubContent] README: ${readmeRes.ok ? `${readme.length} chars` : `FAIL ${readmeRes.status}`}`)
 
-    // 3) 조합
     const parts: string[] = [
       `📦 ${owner}/${repo}`,
       meta.description ? `설명: ${meta.description}` : '',
@@ -342,8 +345,11 @@ async function fetchGitHubContent(owner: string, repo: string, branch?: string):
       meta.topics?.length ? `토픽: ${meta.topics.join(', ')}` : '',
       readme ? `\n--- README ---\n${readme}` : '',
     ]
-    return parts.filter(Boolean).join('\n').slice(0, 6000)
-  } catch {
+    const result = parts.filter(Boolean).join('\n').slice(0, 6000)
+    console.log(`[fetchGitHubContent] final context: ${result.length} chars`)
+    return result
+  } catch (e) {
+    console.log(`[fetchGitHubContent] error:`, e)
     return null
   }
 }
@@ -446,11 +452,16 @@ async function searchGitHubRepos(
 }
 
 async function fetchUrlContent(url: string): Promise<string | null> {
-  // GitHub 레포 URL이면 API로 깔끔하게 가져오기
+  console.log(`[fetchUrlContent] url=${url}`)
   const ghMatch = url.match(GITHUB_REPO_REGEX)
   if (ghMatch) {
+    console.log(`[fetchUrlContent] GitHub detected: ${ghMatch[1]}/${ghMatch[2]}`)
     const result = await fetchGitHubContent(ghMatch[1], ghMatch[2], ghMatch[3])
-    if (result) return result
+    if (result) {
+      console.log(`[fetchUrlContent] GitHub content OK: ${result.length} chars`)
+      return result
+    }
+    console.log(`[fetchUrlContent] GitHub content FAILED, falling back to HTML fetch`)
   }
 
   try {
@@ -1163,13 +1174,27 @@ async function generateContent(
   const typeLabel = { cardnews: '카드뉴스', newsletter: '뉴스레터', blog: '블로그', sns: 'SNS 포스팅' }
 
   const hasUrlAnalysis = context && (context.includes('■ URL 분석') || context.includes('■ GitHub'))
+  console.log(`[generateContent] type=${contentType}, topic=${topic.slice(0, 50)}, hasUrl=${hasUrlAnalysis}, contextLen=${context?.length || 0}`)
+  if (hasUrlAnalysis) {
+    console.log(`[generateContent] context preview: ${context.slice(0, 200)}`)
+  }
   const prompt = `당신은 AI 회사 "QuickBizLab"의 ${dept} 부서 ${role} "${employeeName}"입니다.
 
 대표님 요청: "${topic}"
-${context ? `참고 맥락:\n${context}\n` : ''}
-${hasUrlAnalysis ? `**중요**: 위 "참고 맥락"에 URL/GitHub에서 가져온 실제 내용이 있습니다. 반드시 그 내용을 정확히 기반으로 작성하세요. 맥락에 없는 내용을 지어내지 마세요. 프로젝트 이름, 기능, 수치 등 모두 실제 README/페이지 내용과 일치해야 합니다.\n` : ''}
+
+■ 출력 형식 (아래는 형식 안내이며, 예시의 프로젝트명/기능/수치를 복사하지 마세요):
 ${CONTENT_PROMPTS[contentType]}
 
+${hasUrlAnalysis ? `■■■ 최우선 지시 — 실제 데이터 기반 작성 ■■■
+아래 "실제 데이터"에 URL/GitHub README에서 가져온 내용이 있습니다.
+- 반드시 이 데이터의 프로젝트명, 기능, 수치, 설명을 그대로 사용하세요
+- 위 형식 예시의 프로젝트(REA 등)를 참고하되 내용은 절대 복사하지 마세요
+- 데이터에 없는 기능이나 수치를 지어내지 마세요
+- cover의 kicker에는 실제 프로젝트명을 넣으세요
+
+■ 실제 데이터:
+${context}
+` : (context ? `참고 맥락:\n${context}\n` : '')}
 QuickBizLab 브랜드로 작성하세요. 후킹형 톤: 질문형/도발형 카피로 독자 호기심을 자극하고 다음 장을 넘기고 싶게 만드세요.`
 
   const { reply: content, model } = await aiChat(prompt, 45, undefined, undefined, 6000)
@@ -1591,6 +1616,7 @@ ${role === '레드팀' ? '9. [레드팀] 리스크/문제점 지적 + 개선안'
     const taskContentType = detectContentType(taskDesc)
     if (taskContentType) {
       const contentContext = [context, githubSearchContext, taskUrlContext].filter(Boolean).join('\n')
+      console.log(`[autonomous] contentContext assembled: context=${context?.length || 0}, github=${githubSearchContext?.length || 0}, url=${taskUrlContext?.length || 0}, total=${contentContext.length}`)
       contentResult = await generateContent(taskContentType, taskDesc, dept, name, role, contentContext)
       if (contentResult && !notionSaved) {
         notionSaved = { title: contentResult.title, url: contentResult.url, type: contentResult.type }
@@ -1835,6 +1861,7 @@ ${employeeName}:`
       ).join('\n'),
       urlContext,
     ].filter(Boolean).join('\n')
+    console.log(`[directMsg] content contextLines: urlContext=${urlContext?.length || 0}, total=${contextLines.length}`)
     content = await generateContent(contentType, message, dept, employeeName, role, contextLines)
   }
 
