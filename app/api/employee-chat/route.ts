@@ -249,7 +249,13 @@ async function searchUnsplashImage(query: string): Promise<string | null> {
 
 async function fillSlideImages(slides: Array<{ imageUrl?: string; imageKeyword?: string; layout?: string }>): Promise<void> {
   if (!process.env.UNSPLASH_ACCESS_KEY) return
+  const imageLayouts = new Set(['cover', 'photo'])
   const tasks = slides.map(async (slide) => {
+    if (!imageLayouts.has(slide.layout || '')) {
+      delete slide.imageKeyword
+      delete slide.imageUrl
+      return
+    }
     if (slide.imageKeyword && !slide.imageUrl) {
       const url = await searchUnsplashImage(slide.imageKeyword)
       if (url) slide.imageUrl = url
@@ -1081,7 +1087,7 @@ const CONTENT_PROMPTS: Record<ContentType, string> = {
 - **title에서 강조하고 싶은 단어는 **별표**로 감싸기** (예: "**7장**이면 충분해요")
 - title은 15자 이내로 짧고 임팩트 있게. 긴 설명은 body나 items에
 - 이모지: cover와 outro에만 1개씩. 중간 슬라이드에는 이모지 불필요
-- imageKeyword: 각 슬라이드에 배경 이미지 검색용 영어 키워드 1~2단어 (예: "coding laptop", "data chart", "team meeting")
+- imageKeyword: cover와 photo 레이아웃에만 배경 이미지 검색용 영어 키워드 1~2단어 (예: "coding laptop", "data chart"). 나머지 레이아웃에는 imageKeyword 넣지 마세요
 - 해시태그 5개
 
 출력: 순수 JSON만 (설명 없이, 코드블록 없이):
