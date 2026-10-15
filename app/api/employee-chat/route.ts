@@ -767,12 +767,9 @@ const ROLE_PERSONA: Record<string, string> = {
 
 // ── AI 모델 호출
 
-// Gemini 모델 자동 교체 시스템 — 한도 초과 시 다음 모델로 자동 전환
+// Gemini 모델 — gemini-3.5-flash-lite 고정 (카드뉴스 품질 안정)
 const GEMINI_MODELS = [
-  'gemini-3.5-flash',       // 1순위: 최신 안정
-  'gemini-3.5-flash-lite',  // 2순위: 경량 (한도 별도)
-  'gemini-3.1-flash-lite',  // 3순위: 이전 세대 경량
-  'gemini-3.6-flash',       // 4순위: 최신 (한도 20/일로 적음)
+  'gemini-3.5-flash-lite',  // 고정 모델
 ]
 
 // 모델별 한도 차단 상태 (메모리 캐시, 서버리스 인스턴스 수명 동안 유지)
@@ -1139,6 +1136,8 @@ README/URL 내용을 분석해서 가장 적합한 레이아웃을 자동 선택
 - 이모지 사용 금지
 - imageKeyword: cover/photo에만 영어 1~2단어
 - 해시태그 5개
+- 절대 빈 필드 금지: items의 head/body, quote, number, desc, sub 등 모든 텍스트 필드에 반드시 내용 채우세요
+- list의 items는 반드시 head와 body 모두 실제 텍스트 포함 (빈 문자열 ""/null 불가)
 
 출력: 순수 JSON만 (설명/코드블록 없이):
 {"slides":[{"layout":"cover","kicker":"프로젝트명","title":"**핵심 키워드** 후킹 제목","sub":"짧은 부제","imageKeyword":"keyword"},{"layout":"list","title":"핵심 기능","items":[{"head":"기능1","body":"한 문장 설명"},{"head":"기능2","body":"한 문장 설명"},{"head":"기능3","body":"한 문장 설명"}]},{"layout":"stat","kicker":"지표","number":"50K+","desc":"수치 설명"},{"layout":"photo","title":"비주얼 제목","sub":"짧은 설명","imageKeyword":"keyword"},{"layout":"outro","title":"행동 유도","sub":"마무리","cta":"시작하기"}],"hashtags":["태그1","태그2","태그3","태그4","태그5"]}`,
@@ -1237,14 +1236,24 @@ QuickBizLab 브랜드로 작성하세요. 후킹형 톤: 질문형/도발형 카
         if (slide.items && Array.isArray(slide.items)) {
           const items = slide.items as Record<string, unknown>[]
           if (slide.layout === 'stat' && items.length > 0 && !slide.number) {
-            slide.number = items[0].value || items[0].body || ''
-            slide.desc = items[0].label || items[0].head || ''
+            slide.number = String(items[0].value || items[0].body || items[0].number || '0')
+            slide.desc = String(items[0].label || items[0].head || items[0].desc || '')
           }
-          slide.items = items.map(it => ({
-            head: it.head || it.label || '',
-            body: it.body || it.value || '',
-          }))
+          slide.items = items
+            .map(it => ({
+              head: String(it.head || it.label || it.title || it.name || ''),
+              body: String(it.body || it.value || it.description || it.desc || it.content || ''),
+            }))
+            .filter(it => it.head.trim() || it.body.trim())
         }
+        if (slide.quote && typeof slide.quote === 'object') {
+          slide.quote = String((slide.quote as Record<string, unknown>).text || (slide.quote as Record<string, unknown>).content || slide.quote)
+        }
+        if (slide.title) slide.title = String(slide.title)
+        if (slide.sub) slide.sub = String(slide.sub)
+        if (slide.kicker) slide.kicker = String(slide.kicker)
+        if (slide.number) slide.number = String(slide.number)
+        if (slide.desc) slide.desc = String(slide.desc)
       }
       await fillSlideImages(parsed.slides as Array<{ imageKeyword?: string; imageUrl?: string }>)
       cardnewsData = parsed as ContentResult['cardnewsData']
