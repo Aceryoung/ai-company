@@ -1147,11 +1147,12 @@ async function generateContent(
 ): Promise<ContentResult | null> {
   const typeLabel = { cardnews: '카드뉴스', newsletter: '뉴스레터', blog: '블로그', sns: 'SNS 포스팅' }
 
+  const hasUrlAnalysis = context && (context.includes('■ URL 분석') || context.includes('■ GitHub'))
   const prompt = `당신은 AI 회사 "QuickBizLab"의 ${dept} 부서 ${role} "${employeeName}"입니다.
 
 대표님 요청: "${topic}"
 ${context ? `참고 맥락:\n${context}\n` : ''}
-
+${hasUrlAnalysis ? `**중요**: 위 "참고 맥락"에 URL/GitHub에서 가져온 실제 내용이 있습니다. 반드시 그 내용을 정확히 기반으로 작성하세요. 맥락에 없는 내용을 지어내지 마세요. 프로젝트 이름, 기능, 수치 등 모두 실제 README/페이지 내용과 일치해야 합니다.\n` : ''}
 ${CONTENT_PROMPTS[contentType]}
 
 QuickBizLab 브랜드로 작성하세요. 전문적이면서 친근한 톤.`
@@ -1522,7 +1523,7 @@ ${role === '레드팀' ? '9. [레드팀] 리스크/문제점 지적 + 개선안'
     let contentResult: { type: string; title: string; html: string; url: string } | null = null
     const taskContentType = detectContentType(taskDesc)
     if (taskContentType) {
-      const contentContext = githubSearchContext ? `${context}\n${githubSearchContext}` : context
+      const contentContext = [context, githubSearchContext, taskUrlContext].filter(Boolean).join('\n')
       contentResult = await generateContent(taskContentType, taskDesc, dept, name, role, contentContext)
       if (contentResult && !notionSaved) {
         notionSaved = { title: contentResult.title, url: contentResult.url, type: contentResult.type }
@@ -1761,9 +1762,12 @@ ${employeeName}:`
   let content: { type: string; title: string; html: string; url: string } | null = null
   const contentType = detectContentType(message)
   if (contentType) {
-    const contextLines = (history ?? []).slice(-4).map(m =>
-      m.role === 'user' ? `대표님: ${m.content}` : `${employeeName}: ${m.content}`
-    ).join('\n')
+    const contextLines = [
+      (history ?? []).slice(-4).map(m =>
+        m.role === 'user' ? `대표님: ${m.content}` : `${employeeName}: ${m.content}`
+      ).join('\n'),
+      urlContext,
+    ].filter(Boolean).join('\n')
     content = await generateContent(contentType, message, dept, employeeName, role, contextLines)
   }
 
