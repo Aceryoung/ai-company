@@ -190,7 +190,7 @@ export function CommandPanel({ isMobile, onSwitchToOffice }: Props) {
       const formData = new FormData()
       if (contentData.notionPageId) formData.append('notionPageId', contentData.notionPageId)
       imageBlobs.forEach((blob, idx) => {
-        formData.append('images', new File([blob], `slide_${idx + 1}.png`, { type: 'image/png' }))
+        formData.append('images', new File([blob], `slide_${idx + 1}.jpg`, { type: 'image/jpeg' }))
       })
       formData.append('publishToSns', 'true')
       formData.append('snsCaption', contentData.title || '카드뉴스')
@@ -1740,7 +1740,7 @@ export function CommandPanel({ isMobile, onSwitchToOffice }: Props) {
                           formData.append('notionPageId', contentPreview.notionPageId)
                         }
                         imageBlobs.forEach((blob, idx) => {
-                          formData.append('images', new File([blob], `slide_${idx + 1}.png`, { type: 'image/png' }))
+                          formData.append('images', new File([blob], `slide_${idx + 1}.jpg`, { type: 'image/jpeg' }))
                         })
                         if (publishToSns) {
                           formData.append('publishToSns', 'true')

@@ -12,6 +12,9 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
+  experimental: {
+    proxyClientMaxBodySize: '50mb',
+  },
   async headers() {
     return [
       {

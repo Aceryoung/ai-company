@@ -188,7 +188,7 @@ export async function captureAllCards(
         logging: false,
       })
       const blob = await new Promise<Blob>((res, rej) =>
-        canvas.toBlob(b => b ? res(b) : rej(new Error('blob failed')), 'image/png')
+        canvas.toBlob(b => b ? res(b) : rej(new Error('blob failed')), 'image/jpeg', 0.85)
       )
       blobs.push(blob)
     }

@@ -113,7 +113,9 @@ export async function POST(req: NextRequest) {
     // 1. Supabase Storage 업로드
     for (let i = 0; i < files.length; i++) {
       const file = files[i]
-      const fileName = `${timestamp}_slide_${i + 1}.png`
+      const ext = file.name.endsWith('.jpg') || file.name.endsWith('.jpeg') ? 'jpg' : 'png'
+      const mime = ext === 'jpg' ? 'image/jpeg' : 'image/png'
+      const fileName = `${timestamp}_slide_${i + 1}.${ext}`
       const arrayBuffer = await file.arrayBuffer()
 
       const uploadRes = await fetch(
@@ -122,7 +124,7 @@ export async function POST(req: NextRequest) {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${SUPABASE_KEY}`,
-            'Content-Type': 'image/png',
+            'Content-Type': mime,
             'x-upsert': 'true',
           },
           body: arrayBuffer,
